@@ -1,6 +1,20 @@
 import pygame
 import os
 import json_parser
+import numpy
+
+def unicycle_model(current_pose, controls, time_step):
+    if len(current_pose) != 3:
+        raise Exception("current_pose must be of length 3: x,y,theta")
+    if len(controls) != 2:
+        raise Exception("controls must be of length 2: v, omega")
+
+    new_pose = current_pose
+    new_pose[0] += controls[0]*numpy.cos(current_pose[2])*time_step
+    new_pose[1] += controls[0]*numpy.sin(current_pose[2])*time_step
+    new_pose[2] += controls[1]*time_step
+
+    return new_pose
 
 class Sim2D:
     
@@ -19,27 +33,32 @@ class Sim2D:
         self.track_pix_size = 5
         self.vehicle = None
         self.load_vehicle('Acura_NSX_red.png', 4.4)
+        self.current_pose = None
+        self.model_fcn = unicycle_model
 
         pygame.init()
+
+    def update_pose(self, controls):
+        self.current_pose = self.model_fcn(self.current_pose, controls, 1.0/self.frequency)
 
     def load_vehicle(self, image_path, length):
         self.vehicle = (self.__get_image(image_path), length)
 
     def world2pix(self, world_point):
-        return (int((world_point[0] - self.origin[0])/float(self.scale) + self.screen.get_width()/2.0), int((world_point[1] - self.origin[1])/float(self.scale) + self.screen.get_height()/2.0))
+        return (int((world_point[0] - self.origin[0])/float(self.scale) + self.screen.get_width()/2.0), int((-world_point[1] + self.origin[1])/float(self.scale) + self.screen.get_height()/2.0))
 
     def pix2world(self, pix_point):
-        return ((pix_point[0] - self.screen.get_width()/2.0)*float(self.scale) + self.origin[0], (pix_point[1] - self.screen.get_height()/2.0)*float(self.scale) + self.origin[1])
+        return ((pix_point[0] - self.screen.get_width()/2.0)*float(self.scale) + self.origin[0], -(pix_point[1] - self.screen.get_height()/2.0)*float(self.scale) + self.origin[1])
 
     def set_track(self,track_json_path):
         self.track_json_path = track_json_path
         self.race_line, self.ins_line, self.out_line = json_parser.json_parser(track_json_path, 1)
+        self.current_pose = [self.race_line[0][0], self.race_line[0][1], 0.0]
 
     def render_track(self):
         if self.track_json_path == None:
             raise Exception('Please call set_track method before render_track')
 
-        self.origin = self.race_line[0]
 
         for i in range(len(self.ins_line)):
 
@@ -66,12 +85,11 @@ class Sim2D:
     # Draw vehicle in position world_pos
     def render_vehicle(self, world_pos):
         image = pygame.transform.scale(self.vehicle[0], (int(float(self.vehicle[1])/self.scale), int(float(self.vehicle[1])/self.scale*self.vehicle[0].get_height()/self.vehicle[0].get_width())))
+        image = pygame.transform.rotate(image, world_pos[2]*180.0/numpy.pi)
 
         pix_pos = self.world2pix(world_pos)
         pix_pos = (pix_pos[0] - int(image.get_width()/2.0), pix_pos[1] - int(image.get_height()/2.0))
         self.screen.blit(image, pix_pos)
-
-
 
     def __get_image(self, path):        
         canonicalized_path = path.replace('/', os.sep).replace('\\', os.sep)
@@ -81,9 +99,9 @@ class Sim2D:
     def render(self):
         self.screen.fill(self.background_color)
         self.render_track()
-        self.render_vehicle(self.race_line[0])
+        self.render_vehicle(self.current_pose)
 
-    def update(self):
+    def update(self, controls):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.done = True
@@ -95,8 +113,11 @@ class Sim2D:
                     # Scroll down
                     self.scale /= self.zoom_action
 
-
+        # Update car pose
+        self.update_pose(controls)
+        self.origin = self.current_pose
         self.render()
+        
         pygame.display.flip()        
 
     def sleep(self):
