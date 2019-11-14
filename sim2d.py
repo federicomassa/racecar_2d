@@ -3,19 +3,6 @@ import os
 import json_parser
 import numpy
 
-def unicycle_model(current_pose, controls, time_step):
-    if len(current_pose) != 3:
-        raise Exception("current_pose must be of length 3: x,y,theta")
-    if len(controls) != 2:
-        raise Exception("controls must be of length 2: v, omega")
-
-    new_pose = current_pose
-    new_pose[0] += controls[0]*numpy.cos(current_pose[2])*time_step
-    new_pose[1] += controls[0]*numpy.sin(current_pose[2])*time_step
-    new_pose[2] += controls[1]*time_step
-
-    return new_pose
-
 class Sim2D:
     
     def __init__(self):
@@ -34,12 +21,12 @@ class Sim2D:
         self.vehicle = None
         self.load_vehicle('Acura_NSX_red.png', 4.4)
         self.current_pose = None
-        self.model_fcn = unicycle_model
+        self.model_fcn = None
 
         pygame.init()
 
-    def update_pose(self, controls):
-        self.current_pose = self.model_fcn(self.current_pose, controls, 1.0/self.frequency)
+    def update_pose(self, controls, *argv):
+        self.current_pose = self.model_fcn(self.current_pose, controls, 1.0/self.frequency, *argv)
 
     def load_vehicle(self, image_path, length):
         self.vehicle = (self.__get_image(image_path), length)
@@ -54,6 +41,9 @@ class Sim2D:
         self.track_json_path = track_json_path
         self.race_line, self.ins_line, self.out_line = json_parser.json_parser(track_json_path, 1)
         self.current_pose = [self.race_line[0][0], self.race_line[0][1], 0.0]
+
+    def set_model(self, model_fcn):
+        self.model_fcn = model_fcn
 
     def render_track(self):
         if self.track_json_path == None:
@@ -101,7 +91,7 @@ class Sim2D:
         self.render_track()
         self.render_vehicle(self.current_pose)
 
-    def update(self, controls):
+    def update(self, controls, *argv):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.done = True
@@ -114,7 +104,7 @@ class Sim2D:
                     self.scale /= self.zoom_action
 
         # Update car pose
-        self.update_pose(controls)
+        self.update_pose(controls, *argv)
         self.origin = self.current_pose
         self.render()
         
