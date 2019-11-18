@@ -3,8 +3,24 @@ import os
 import json_parser
 import numpy
 
-class Sim2D:
+class Player:
+    def __init__(self, player_index, image_path, length, model_fcn):
+        self.image = Sim2D.get_image(image_path)
+        self.length = length
+        self.width = self.image.get_height()/self.image.get_width()*length
+        self.model_fcn = model_fcn
+        self.current_pose = None
+
+    def init_pose(self, pose):
+        assert isinstance(pose, list) or isinstance(pose, tuple)
+        assert len(pose) == 3
+        self.current_pose = [x for x in pose]
+
+    def update_pose(self, controls, dT, *argv):
+        self.current_pose = self.model_fcn(self.current_pose, controls, dT, *argv)
     
+
+class Sim2D:
     def __init__(self):
         self.done = False
         self.screen = pygame.display.set_mode((1200,800))
@@ -14,22 +30,36 @@ class Sim2D:
         self.scale = 0.05 # m/pixel
         self.zoom_action = 0.9 # Relative increase in scale on scroll
         self.frequency = 25 # Hz
-        self.origin = (0.0, 0.0)
+        self.focus_player = None
+        self.origin = (0.0,0.0)
         self.background_color = (255, 255, 255)
         self.track_color = (0,0,0)
         self.track_pix_size = 5
-        self.vehicle = None
-        self.load_vehicle('Acura_NSX_red.png', 4.4)
-        self.current_pose = None
-        self.model_fcn = None
 
+        # Dictionary of vehicles in the form {player_index, (vehicle_img, vehicle_length)}
+        self.players = []
+        self.__is_updated = []
         pygame.init()
 
-    def update_pose(self, controls, *argv):
-        self.current_pose = self.model_fcn(self.current_pose, controls, 1.0/self.frequency, *argv)
+    def update_player(self, player_index, controls, *argv):
+        self.players[player_index].update_pose(controls, 1.0/self.frequency, *argv)
+        self.__is_updated[player_index] = True
+        
+    def add_player(self, image_path, vehicle_length, model_fcn, init_pose):
+        self.players.append(Player(len(self.players), image_path, vehicle_length, model_fcn))
+        self.players[len(self.players)-1].init_pose(init_pose)
+        self.__is_updated.append(False)
 
-    def load_vehicle(self, image_path, length):
-        self.vehicle = (self.__get_image(image_path), length)
+        # Return player index
+        return len(self.players) - 1
+
+    def __focus_player(self, player):
+        try:
+            self.focus_player = next(p for p in self.players if p == player)
+            self.origin = (player.current_pose[0], player.current_pose[1])
+        except:
+            raise Exception('Requested camera focus on non-existent player')
+
 
     def world2pix(self, world_point):
         return (int((world_point[0] - self.origin[0])/float(self.scale) + self.screen.get_width()/2.0), int((-world_point[1] + self.origin[1])/float(self.scale) + self.screen.get_height()/2.0))
@@ -40,10 +70,10 @@ class Sim2D:
     def set_track(self,track_json_path):
         self.track_json_path = track_json_path
         self.race_line, self.ins_line, self.out_line = json_parser.json_parser(track_json_path, 1)
-        self.current_pose = [self.race_line[0][0], self.race_line[0][1], 0.0]
+        self.origin = (self.race_line[0][0], self.race_line[0][1])
 
-    def set_model(self, model_fcn):
-        self.model_fcn = model_fcn
+    def set_model(self, player_index, model_fcn):
+        self.players[player_index].model_fcn = model_fcn
 
     def render_track(self):
         if self.track_json_path == None:
@@ -73,15 +103,22 @@ class Sim2D:
             pygame.draw.line(self.screen, self.track_color, start_point_px, end_point_px, self.track_pix_size) 
 
     # Draw vehicle in position world_pos
-    def render_vehicle(self, world_pos):
-        image = pygame.transform.scale(self.vehicle[0], (int(float(self.vehicle[1])/self.scale), int(float(self.vehicle[1])/self.scale*self.vehicle[0].get_height()/self.vehicle[0].get_width())))
-        image = pygame.transform.rotate(image, world_pos[2]*180.0/numpy.pi)
+    def render_vehicles(self):
 
-        pix_pos = self.world2pix(world_pos)
-        pix_pos = (pix_pos[0] - int(image.get_width()/2.0), pix_pos[1] - int(image.get_height()/2.0))
-        self.screen.blit(image, pix_pos)
+        for player in self.players:
+            image = pygame.transform.scale(player.image, (int(float(player.length)/self.scale), int(float(player.length)/self.scale*player.image.get_height()/player.image.get_width())))
+            image = pygame.transform.rotate(image, player.current_pose[2]*180.0/numpy.pi)
 
-    def __get_image(self, path):        
+            # XY coordinates of the top left edge of the vehicle image
+            pix_pos = self.world2pix(player.current_pose)
+            pix_pos = (pix_pos[0] - int(image.get_width()/2.0), pix_pos[1] - int(image.get_height()/2.0))
+            self.screen.blit(image, pix_pos)
+
+            # DEBUG
+            pygame.draw.circle(self.screen, (255,0,0), self.world2pix(player.current_pose), 5)
+
+    @staticmethod
+    def get_image(path):        
         canonicalized_path = path.replace('/', os.sep).replace('\\', os.sep)
         image = pygame.image.load(canonicalized_path)
         return image
@@ -89,9 +126,13 @@ class Sim2D:
     def render(self):
         self.screen.fill(self.background_color)
         self.render_track()
-        self.render_vehicle(self.current_pose)
+        self.render_vehicles()
 
-    def update(self, controls, *argv):
+    def tick(self):
+        # Check if all vehicles were updated
+        all_updated = not any([not u for u in self.__is_updated])
+        assert all_updated
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.done = True
@@ -102,14 +143,28 @@ class Sim2D:
                 if event.button == 5:
                     # Scroll down
                     self.scale /= self.zoom_action
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_1 and len(self.players) > 0:
+                    self.__focus_player(self.players[0])
+                if event.key == pygame.K_2 and len(self.players) > 1:
+                    self.__focus_player(self.players[1])
+                if event.key == pygame.K_3 and len(self.players) > 2:
+                    self.__focus_player(self.players[2])
+                if event.key == pygame.K_4 and len(self.players) > 3:
+                    self.__focus_player(self.players[3])
 
-        # Update car pose
-        self.update_pose(controls, *argv)
-        self.origin = self.current_pose
+
+        # By default, camera follows first player
+        if self.focus_player == None and len(self.players) != 0:
+            self.origin = self.players[0].current_pose
+        elif self.focus_player != None:
+            self.origin = self.focus_player.current_pose
+
         self.render()
         
-        pygame.display.flip()        
+        pygame.display.flip()  
+        self.__sleep()      
 
-    def sleep(self):
+    def __sleep(self):
         self.clock.tick(self.frequency)
 
