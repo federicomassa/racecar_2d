@@ -119,7 +119,6 @@ class Sim2D:
             total_points += 1
 
         for i in range(player.index_ref_trajectory, len(traj)-1):
-            print(i,'/',len(traj)-1)
             if i == player.index_ref_trajectory:
                 delta_s = np.sqrt(np.square(traj[i+1].y-player.current_state[1]) + np.square(traj[i+1].x-player.current_state[0]))
                 a = (np.square(traj[i+1].v) - np.square(player.current_state[3]))/(2*delta_s)
@@ -127,7 +126,6 @@ class Sim2D:
                     delta_t = delta_s/traj[i].v
                 else:
                     delta_t = (traj[i+1].v-player.current_state[3])/a
-                print('debug1:',delta_t,t_step, a, traj[i+1].v-player.current_state[3])
             else:
                 delta_s = np.sqrt(np.square(traj[i+1].y-traj[i].y) + np.square(traj[i+1].x-traj[i].x))
                 a = (np.square(traj[i+1].v) - np.square(traj[i].v))/(2*delta_s)
@@ -136,8 +134,6 @@ class Sim2D:
                 else:
                     delta_t = (traj[i+1].v-traj[i].v)/a
                 
-                print('debug2:',delta_t,t_step, a, traj[i+1].v-traj[i].v)
-
 
             N_steps = int(np.ceil(delta_t/t_step))
             if N_steps == 0:
@@ -149,8 +145,6 @@ class Sim2D:
 
             jmin = len(xnew)
             jmax = len(xnew) + N_steps
-
-            print('ds',delta_s, 'a',a, 'dt',delta_t, 'N_steps',N_steps, 'tot_points', total_points, 'jmin/jmax', jmin,'/',jmax)
 
             requested_break = False
 
@@ -165,7 +159,6 @@ class Sim2D:
                     ynew.append(player.current_state[1])
                     thetanew.append(np.arctan2(traj[i+1].y-player.current_state[1], traj[i+1].x - player.current_state[0]))
                     vnew.append(player.current_state[3]) 
-                    print(player.current_state[1], traj[i+1].y, player.current_state[0], traj[i+1].x, np.arctan2(player.current_state[1]-traj[i+1].y, player.current_state[0]-traj[i+1].x))
                 else:
                     xnew.append(xnew[j-1] + vnew[j-1]*np.cos(thetanew[j-1])*t_step)
                     ynew.append(ynew[j-1] + vnew[j-1]*np.sin(thetanew[j-1])*t_step)
@@ -184,7 +177,6 @@ class Sim2D:
         else:
             player.index_ref_trajectory = i
 
-        print('index:',i)
         player.current_state = [xnew[total_points-1], ynew[total_points-1], thetanew[total_points-1], vnew[total_points-1]]
         self.__is_updated[player_index] = True
         
@@ -288,16 +280,20 @@ class Sim2D:
         all_updated = not any([not u for u in self.__is_updated])
         assert all_updated
 
+        print(self.scale)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.done = True
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 4:
                     # Scroll up
-                    self.scale *= self.zoom_action
+                    if self.scale > 0.02:
+                        self.scale *= self.zoom_action
                 if event.button == 5:
                     # Scroll down
-                    self.scale /= self.zoom_action
+                    if self.scale < 1.0:
+                        self.scale /= self.zoom_action
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_1 and len(self.players) > 0:
                     self.__focus_player(self.players[0])
