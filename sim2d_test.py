@@ -23,4 +23,8 @@ while not sim.done:
     sim.update_player(0, (1,0.1))
     sim.update_player(1, (2,0.1))
     sim.update_player(2, (2,-0.1))
+    
+    # first_player_state = sim.players[0].current_state
+    # print("x: {:.2f}, y: {:.2f}, theta: {:.2f}, v: {:.2f}".format(first_player_state[0], first_player_state[1], first_player_state[2], first_player_state[3]))
+
     sim.tick()
