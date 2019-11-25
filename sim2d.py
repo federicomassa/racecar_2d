@@ -14,7 +14,7 @@ class TrajectoryPoint:
 class Player:
     def __init__(self, player_index, image_path, length, model_fcn):
         self.image = Sim2D.get_image(image_path)
-        self.id = -1
+        self.id = player_index
         self.length = length
         self.width = self.image.get_height()/self.image.get_width()*length
         self.model_fcn = model_fcn
@@ -69,11 +69,16 @@ class Sim2D:
         self.zoom_action = 0.9 # Relative increase in scale on scroll
         self.frequency = 25 # Hz
         self.focus_player = None
+        self.is_manual = False
         self.origin = (0.0,0.0)
         self.background_color = (255, 255, 255)
         self.track_color = (0,0,0)
         self.font_color = (0,0,0)
         self.track_pix_size = 5
+        self.manual_acc_control = 0.8
+        self.manual_brake_control = 1.0
+        self.manual_steer_control = 1.0
+        self.manual_model_fcn = unicycle_model
 
         # Dictionary of vehicles in the form {player_index, (vehicle_img, vehicle_length)}
         self.players = []
@@ -86,12 +91,23 @@ class Sim2D:
         self.players[player_index].set_trajectory(csv_file)
 
     def update_player(self, player_index, controls, *argv):
+        # If manual mode ignore controls from outside
+        if self.focus_player != None and self.focus_player.id == player_index and self.is_manual:
+            return
+        else:
+            self.__update_player(player_index, controls, *argv)
+
+    def __update_player(self, player_index, controls, *argv):
         if self.players[player_index].ref_trajectory != None:
             raise Exception("Calling update player on a trajectory following vehicle. Please call update_trajectory")
 
         self.players[player_index].update_state(controls, 1.0/self.frequency, *argv)
-
         self.__is_updated[player_index] = True
+
+    def __update_player_manual(self, player_index, controls, *argv):
+        self.players[player_index].current_pose = self.manual_model_fcn(self.players[player_index].current_state, controls, 1.0/self.frequency, *argv)
+        self.__is_updated[player_index] = True
+
 
     def update_trajectory(self, player_index):
         player = self.players[player_index]
@@ -183,7 +199,6 @@ class Sim2D:
     def add_player(self, image_path, vehicle_length, model_fcn, init_state):
         self.players.append(Player(len(self.players), image_path, vehicle_length, model_fcn))
         self.players[len(self.players)-1].init_state(init_state)
-        self.players[len(self.players)-1].id = len(self.players)
         self.__is_updated.append(False)
 
         # Return player index
@@ -251,12 +266,22 @@ class Sim2D:
 
     def render_ui(self):
         player_text = 'Player ' + str(self.focus_player.id)
+        if (self.is_manual):
+            player_text += ' - MANUAL'
+
+        state_text = "v: {:.2f} m/s".format(self.focus_player.current_state[3])
+
         time_text ='Time: ' + "{:4.2f}".format(self.current_time)
 
         player_text_surface = self.__font.render(player_text, True, self.font_color, self.background_color)
         player_text_rect = player_text_surface.get_rect()
         player_text_rect.center = (int(player_text_rect.width/2.0 + 0.05*self.screen.get_width()),int(player_text_rect.height/2.0 + 0.05*self.screen.get_height()))
         self.screen.blit(player_text_surface, player_text_rect)
+
+        state_text_surface = self.__font.render(state_text, True, self.font_color, self.background_color)
+        state_text_rect = state_text_surface.get_rect()
+        state_text_rect.center = (int(state_text_rect.width/2.0 + 0.05*self.screen.get_width()),int(state_text_rect.height/2.0 + 0.05*self.screen.get_height() + player_text_rect.height))
+        self.screen.blit(state_text_surface, state_text_rect)
 
         time_text_surface = self.__font.render(time_text, True, self.font_color, self.background_color)
         time_text_rect = time_text_surface.get_rect()
@@ -272,15 +297,15 @@ class Sim2D:
     def render(self):
         self.screen.fill(self.background_color)
         self.render_track()
-        self.render_vehicles()
-        self.render_ui()
+
+        if len(self.players) != 0:
+            self.render_vehicles()
+            self.render_ui()
 
     def tick(self):
         # Check if all vehicles were updated
         all_updated = not any([not u for u in self.__is_updated])
         assert all_updated
-
-        print(self.scale)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -297,19 +322,44 @@ class Sim2D:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_1 and len(self.players) > 0:
                     self.__focus_player(self.players[0])
+                    self.is_manual = False
                 if event.key == pygame.K_2 and len(self.players) > 1:
                     self.__focus_player(self.players[1])
+                    self.is_manual = False
                 if event.key == pygame.K_3 and len(self.players) > 2:
                     self.__focus_player(self.players[2])
+                    self.is_manual = False
                 if event.key == pygame.K_4 and len(self.players) > 3:
                     self.__focus_player(self.players[3])
+                    self.is_manual = False
+                if event.key == pygame.K_m and self.focus_player != None:
+                    self.is_manual = not self.is_manual
 
+        if self.is_manual and self.focus_player != None:                
+            pressed = pygame.key.get_pressed()
 
-        # By default, camera follows first player
+            # Controls for manual mode
+            acc = 0
+            steer = 0
+
+            if pressed[pygame.K_UP]:
+                acc += self.manual_acc_control
+            if pressed[pygame.K_DOWN]:
+                acc -= self.manual_brake_control
+            if pressed[pygame.K_LEFT]:
+                steer += self.manual_steer_control
+            if pressed[pygame.K_RIGHT]:
+                steer -= self.manual_steer_control
+
+            self.__update_player_manual(self.focus_player.id, (acc, steer))
+
+        # By default, camera follows first player if present
         if self.focus_player == None and len(self.players) != 0:
             self.__focus_player(self.players[0])
         elif self.focus_player != None:
             self.origin = self.focus_player.current_state
+        elif len(self.players) == 0:
+            self.origin = self.race_line[0]
 
         self.render()
         
