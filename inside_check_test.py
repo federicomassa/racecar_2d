@@ -4,6 +4,8 @@ from scipy.spatial import Delaunay
 import matplotlib.pyplot as plt
 import matplotlib.path as mpath
 
+import time
+
 def clean_triangles(inside_points, outside_points, triangles):
     clean_triangles = []
 
@@ -18,6 +20,17 @@ def clean_triangles(inside_points, outside_points, triangles):
 
     return np.array(clean_triangles)
 
+def is_inside(point, triangle):
+    t1 = triangle[0]
+    t2 = triangle[1]
+    t3 = triangle[2]
+    c1 = (t2[0]-t1[0])*(point[1]-t1[1])-(t2[1]-t1[1])*(point[0]-t1[0])
+    c2 = (t3[0]-t2[0])*(point[1]-t2[1])-(t3[1]-t2[1])*(point[0]-t2[0])
+    c3 = (t1[0]-t3[0])*(point[1]-t3[1])-(t1[1]-t3[1])*(point[0]-t3[0])
+    if (c1<0 and c2<0 and c3<0) or (c1>0 and c2>0 and c3>0):
+        return True
+    else:
+        return False
 
 sim = Sim2D()
 sim.frequency = 25
@@ -48,13 +61,34 @@ for p in points_clean:
 
 center_points = np.array(center_points)
 
-#plt.triplot(points[:,0], points[:,1], t_clean)
-plt.plot(points[:,0], points[:,1], 'o')
-plt.plot(center_points[:,0], center_points[:,1],'x')
-plt.show()
+# plt.triplot(points[:,0], points[:,1], t_clean)
+# plt.plot(points[:,0], points[:,1], 'o')
+# #plt.plot(center_points[:,0], center_points[:,1],'x')
+# plt.show()
 
 
 #sim.set_trajectory(0, 'test_traj.csv')
 
-# while not sim.done:
-#     sim.tick()
+init_pose = []
+init_pose.append((sim.race_line[0][0], sim.race_line[0][1], 0.0, 0.0))
+sim.add_player('Acura_NSX_red.png', 4.4, unicycle_model, init_pose[0])
+
+while not sim.done:
+    start = time.time()
+    sim.update_player(0, (1,0.1))
+    update = time.time()
+
+    if sim.last_clicked_point != None:
+        is_inside_track = False
+
+        for triangle in points_clean:
+            if is_inside(sim.last_clicked_point, triangle):
+                is_inside_track = True
+                break
+
+        after_check = time.time()
+        
+        sim.last_clicked_point = None
+        print(update - start, after_check - update)
+    
+    sim.tick()

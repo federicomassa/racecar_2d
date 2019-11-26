@@ -79,6 +79,12 @@ class Sim2D:
         self.manual_brake_control = 1.0
         self.manual_steer_control = 1.0
         self.manual_model_fcn = unicycle_model
+        self.clicked_point = None
+        self.pressed_point = None
+        self.__queue_paths = None
+
+        # Camera free to move with mouse
+        self.__fly_mode = False
 
         # Dictionary of vehicles in the form {player_index, (vehicle_img, vehicle_length)}
         self.players = []
@@ -105,9 +111,8 @@ class Sim2D:
         self.__is_updated[player_index] = True
 
     def __update_player_manual(self, player_index, controls, *argv):
-        self.players[player_index].current_pose = self.manual_model_fcn(self.players[player_index].current_state, controls, 1.0/self.frequency, *argv)
+        self.players[player_index].current_state = self.manual_model_fcn(self.players[player_index].current_state, controls, 1.0/self.frequency, *argv)
         self.__is_updated[player_index] = True
-
 
     def update_trajectory(self, player_index):
         player = self.players[player_index]
@@ -288,6 +293,26 @@ class Sim2D:
         time_text_rect.center = (int(self.screen.get_width() - time_text_rect.width/2.0 - 0.05*self.screen.get_width()),int(time_text_rect.height/2.0 + 0.05*self.screen.get_height()))
         self.screen.blit(time_text_surface, time_text_rect)
 
+    def render_paths(self):
+        for path_pix,color in self.__queue_paths:
+            pygame.draw.circle(self.screen, color, path_pix[0], 2*self.track_pix_size)
+            for i in range(len(path_pix)-1):
+                pygame.draw.line(self.screen, color, path_pix[i], path_pix[i+1], self.track_pix_size)
+                pygame.draw.circle(self.screen, color, path_pix[i+1], 2*self.track_pix_size)
+
+
+    def draw_path(self, path, color=(0,0,255)):
+        assert len(path) > 2
+
+        path_pix = []
+        for t in path:
+            path_pix.append(self.world2pix(t))
+
+        if self.__queue_paths == None:
+            self.__queue_paths = []
+
+        self.__queue_paths.append((path_pix, color))
+
     @staticmethod
     def get_image(path):        
         canonicalized_path = path.replace('/', os.sep).replace('\\', os.sep)
@@ -300,9 +325,15 @@ class Sim2D:
 
         if len(self.players) != 0:
             self.render_vehicles()
+
+        if not self.__fly_mode:
             self.render_ui()
 
-    def tick(self):
+        if self.__queue_paths != None:
+            self.render_paths()
+            self.__queue_paths = None
+
+    def tick(self, **kwargs):
         # Check if all vehicles were updated
         all_updated = not any([not u for u in self.__is_updated])
         assert all_updated
@@ -323,17 +354,31 @@ class Sim2D:
                 if event.key == pygame.K_1 and len(self.players) > 0:
                     self.__focus_player(self.players[0])
                     self.is_manual = False
+                    self.__fly_mode = False
                 if event.key == pygame.K_2 and len(self.players) > 1:
                     self.__focus_player(self.players[1])
                     self.is_manual = False
+                    self.__fly_mode = False
                 if event.key == pygame.K_3 and len(self.players) > 2:
                     self.__focus_player(self.players[2])
                     self.is_manual = False
+                    self.__fly_mode = False
                 if event.key == pygame.K_4 and len(self.players) > 3:
                     self.__focus_player(self.players[3])
                     self.is_manual = False
+                    self.__fly_mode = False
+                if event.key == pygame.K_0:
+                    self.is_manual = False
+                    self.__fly_mode = True
+                    self.focus_player = None
                 if event.key == pygame.K_m and self.focus_player != None:
                     self.is_manual = not self.is_manual
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.clicked_point == None:
+                    self.clicked_point = self.pix2world(event.pos)
+            if event.type == pygame.MOUSEBUTTONUP:
+                self.clicked_point = None
+                self.pressed_point = None
 
         if self.is_manual and self.focus_player != None:                
             pressed = pygame.key.get_pressed()
@@ -353,15 +398,34 @@ class Sim2D:
 
             self.__update_player_manual(self.focus_player.id, (acc, steer))
 
+
+
         # By default, camera follows first player if present
-        if self.focus_player == None and len(self.players) != 0:
+        if self.focus_player == None and len(self.players) != 0 and not self.__fly_mode:
             self.__focus_player(self.players[0])
         elif self.focus_player != None:
-            self.origin = self.focus_player.current_state
+            s = self.focus_player.current_state
+            self.origin = [s[0], s[1], s[2]]
         elif len(self.players) == 0:
             self.origin = self.race_line[0]
+        elif self.__fly_mode and self.clicked_point != None and self.pressed_point != None:
+            # Update origin with pressed point from previous iteration
+            self.origin = [self.origin[i] - self.pix2world(pygame.mouse.get_pos())[i] + self.pressed_point[i] for i in range(2)]
 
-        self.render()
+        clicked = pygame.mouse.get_pressed()
+        if clicked[0]:
+            self.pressed_point = self.pix2world(pygame.mouse.get_pos())
+
+        # Render by default
+        do_render = True
+        if 'render' in kwargs:
+            if isinstance(kwargs.get('render'), bool):
+                do_render = kwargs.get('render')
+            else:
+                raise Exception("Called Sim2D.tick() with bad render arg. Must be a bool!")
+    
+        if do_render:
+            self.render()
         
         pygame.display.flip()  
         self.current_time += self.__sleep()/1000.0
