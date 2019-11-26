@@ -73,22 +73,20 @@ init_pose = []
 init_pose.append((sim.race_line[0][0], sim.race_line[0][1], 0.0, 0.0))
 sim.add_player('Acura_NSX_red.png', 4.4, unicycle_model, init_pose[0])
 
-while not sim.done:
-    start = time.time()
-    sim.update_player(0, (1,0.1))
-    update = time.time()
 
-    if sim.last_clicked_point != None:
+last_clicked_point = None
+while not sim.done:
+    sim.update_player(0, (1,0.1))
+    sim.tick()
+
+    if sim.clicked_point == None and last_clicked_point != None:
         is_inside_track = False
 
         for triangle in points_clean:
-            if is_inside(sim.last_clicked_point, triangle):
+            if is_inside(last_clicked_point, triangle):
                 is_inside_track = True
                 break
-
-        after_check = time.time()
         
-        sim.last_clicked_point = None
-        print(update - start, after_check - update)
+        print("Clicked point inside? {}".format(is_inside_track))
     
-    sim.tick()
+    last_clicked_point = sim.clicked_point
