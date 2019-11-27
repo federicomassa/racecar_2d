@@ -5,10 +5,9 @@ import numpy as np
 import csv
 
 class TrajectoryPoint:
-    def __init__(self, x=None, y=None, theta=None, v=None):
+    def __init__(self, x=None, y=None, v=None):
         self.x = x
         self.y = y
-        self.theta = theta
         self.v = v
 
 class Player:
@@ -33,10 +32,10 @@ class Player:
     def set_trajectory(self, csv_file):
         trajectory = []
 
-        with open(csv_file, newline='') as csvfile:
+        with open(csv_file) as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                trajectory.append(TrajectoryPoint(float(row['x']), float(row['y']), float(row['theta']), float(row['v'])))
+                trajectory.append(TrajectoryPoint(float(row['x']), float(row['y']), float(row['v'])))
 
         assert len(trajectory) != 0
         
