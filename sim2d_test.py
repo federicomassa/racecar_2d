@@ -1,5 +1,4 @@
-from sim2d import Sim2D
-from sim2d import unicycle_model
+from racecar_2d import *
 import numpy
 
 sim = Sim2D(render=False)
@@ -19,6 +18,7 @@ sim.add_player('Batmobile.png', 5.0, unicycle_model, init_pose[2])
 sim.set_trajectory(0, 'test_traj.csv')
 
 while not sim.done:
+    print(counter)
     sim.update_trajectory(0)
     #sim.update_player(0, (1,0.1))
     sim.update_player(1, (2,0.1))

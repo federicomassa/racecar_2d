@@ -59,10 +59,16 @@ def unicycle_model(current_state, controls, time_step, *argv):
     return new_state
 
 class Sim2D:
-    def __init__(self, render=True):
+    def __init__(self, render=True, real_time=True):
         self.done = False
         # If render to screen or play in background
         self.do_render = render
+
+        # If the simulator should sleep before iterations to maintain desired frequency or not
+        if render and not real_time:
+            raise Exception("Rendering only supports real time mode.")
+
+        self.real_time = real_time
 
         # Graphical properties
         self.screen = None
@@ -460,5 +466,6 @@ class Sim2D:
         if self.do_render:
             return self.clock.tick(self.frequency)/1000.0
         else:
-            time.sleep(1.0/self.frequency)
+            if self.real_time:
+                time.sleep(1.0/self.frequency)
             return 1.0/self.frequency
