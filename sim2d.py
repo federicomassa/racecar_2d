@@ -444,8 +444,6 @@ class Sim2D:
 
             self.__update_player_manual(self.focus_player.id, (acc, steer))
 
-
-
         # By default, camera follows first player if present
         if self.focus_player == None and len(self.players) != 0 and not self.__fly_mode:
             self.__focus_player(self.players[0])
