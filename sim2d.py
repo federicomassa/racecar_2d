@@ -1,6 +1,6 @@
 import pygame
 import os
-import json_parser
+import racecar_2d.json_parser as json_parser
 import numpy as np
 import csv
 import time
