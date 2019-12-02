@@ -73,7 +73,6 @@ init_pose = []
 init_pose.append((sim.race_line[0][0], sim.race_line[0][1], 0.0, 0.0))
 sim.add_player('Acura_NSX_red.png', 4.4, unicycle_model, init_pose[0])
 
-
 last_clicked_point = None
 while not sim.done:
     sim.update_player(0, (1,0.1))

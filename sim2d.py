@@ -3,6 +3,8 @@ import os
 import json_parser
 import numpy as np
 import csv
+import time
+from collections import deque
 
 class TrajectoryPoint:
     def __init__(self, x=None, y=None, v=None):
@@ -57,30 +59,55 @@ def unicycle_model(current_state, controls, time_step, *argv):
     return new_state
 
 class Sim2D:
-    def __init__(self):
+    def __init__(self, render=True):
         self.done = False
-        self.screen = pygame.display.set_mode((1200,800))
-        pygame.display.set_caption('TazioSim 2D')
-        self.clock = pygame.time.Clock()
-        self.current_time = 0.0
-        self.track_json_path = None
-        self.scale = 0.05 # m/pixel
-        self.zoom_action = 0.9 # Relative increase in scale on scroll
-        self.frequency = 25 # Hz
+        # If render to screen or play in background
+        self.do_render = render
+
+        # Graphical properties
+        self.screen = None
+        self.clock = None
+        self.track_pix_size = None
+        self.__font = None
+        self.scale = None
+        self.zoom_action = None
         self.focus_player = None
         self.is_manual = False
-        self.origin = (0.0,0.0)
-        self.background_color = (255, 255, 255)
-        self.track_color = (0,0,0)
-        self.font_color = (0,0,0)
-        self.track_pix_size = 5
-        self.manual_acc_control = 0.8
-        self.manual_brake_control = 1.0
-        self.manual_steer_control = 1.0
-        self.manual_model_fcn = unicycle_model
+        self.origin = None
+        self.manual_acc_control = None
+        self.manual_brake_control = None
+        self.manual_steer_control = None
+        self.manual_model_fcn = None
         self.clicked_point = None
         self.pressed_point = None
         self.__queue_paths = None
+        self.__queue_players = deque()
+
+        if self.do_render:
+            self.screen = pygame.display.set_mode((1200,800))
+            pygame.display.set_caption('TazioSim 2D')
+            self.clock = pygame.time.Clock()
+            self.track_pix_size = 5
+            self.background_color = (255, 255, 255)
+            self.track_color = (0,0,0)
+            self.font_color = (0,0,0)
+            pygame.init()
+            self.__font = pygame.font.Font('freesansbold.ttf', 32)
+            
+            self.scale = 0.05 # m/pixel
+            self.zoom_action = 0.9 # Relative increase in scale on scroll
+            self.is_manual = False
+            self.origin = (0.0,0.0)
+            self.manual_acc_control = 0.8
+            self.manual_brake_control = 1.0
+            self.manual_steer_control = 1.0
+            self.manual_model_fcn = unicycle_model
+
+
+        self.current_time = 0.0
+        self.track_json_path = None
+       
+        self.frequency = 25 # Hz
 
         # Camera free to move with mouse
         self.__fly_mode = False
@@ -88,9 +115,7 @@ class Sim2D:
         # Dictionary of vehicles in the form {player_index, (vehicle_img, vehicle_length)}
         self.players = []
         self.__is_updated = []
-        pygame.init()
 
-        self.__font = pygame.font.Font('freesansbold.ttf', 32)
 
     def set_trajectory(self, player_index, csv_file):
         self.players[player_index].set_trajectory(csv_file)
@@ -106,7 +131,7 @@ class Sim2D:
         if self.players[player_index].ref_trajectory != None:
             raise Exception("Calling update player on a trajectory following vehicle. Please call update_trajectory")
 
-        self.players[player_index].update_state(controls, 1.0/self.frequency, *argv)
+        self.__queue_players.append((player_index, controls, *argv))
         self.__is_updated[player_index] = True
 
     def __update_player_manual(self, player_index, controls, *argv):
@@ -332,11 +357,33 @@ class Sim2D:
             self.render_paths()
             self.__queue_paths = None
 
-    def tick(self, **kwargs):
+    def tick(self):
         # Check if all vehicles were updated
         all_updated = not any([not u for u in self.__is_updated])
         assert all_updated
+    
+        # Update players in queue
+        while len(self.__queue_players) != 0:
+            p = self.__queue_players.pop()
 
+            # If argv are provided            
+            if len(p) == 3:
+                self.players[p[0]].update_state(p[1], 1.0/self.frequency, p[2])
+            else:
+                self.players[p[0]].update_state(p[1], 1.0/self.frequency)
+
+        if self.do_render:
+            self.__interact()
+            self.render()
+            pygame.display.flip()  
+        
+        self.current_time += self.__sleep()
+
+        # Reset
+        for player in self.players:
+            player.__is_updated = False
+
+    def __interact(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.done = True
@@ -415,24 +462,10 @@ class Sim2D:
         if clicked[0]:
             self.pressed_point = self.pix2world(pygame.mouse.get_pos())
 
-        # Render by default
-        do_render = True
-        if 'render' in kwargs:
-            if isinstance(kwargs.get('render'), bool):
-                do_render = kwargs.get('render')
-            else:
-                raise Exception("Called Sim2D.tick() with bad render arg. Must be a bool!")
-    
-        if do_render:
-            self.render()
-        
-        pygame.display.flip()  
-        self.current_time += self.__sleep()/1000.0
-
-        # Reset
-        for player in self.players:
-            player.__is_updated = False
 
     def __sleep(self):
-        return self.clock.tick(self.frequency)
-
+        if self.do_render:
+            return self.clock.tick(self.frequency)/1000.0
+        else:
+            time.sleep(1.0/self.frequency)
+            return 1.0/self.frequency

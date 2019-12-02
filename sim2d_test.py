@@ -2,7 +2,7 @@ from sim2d import Sim2D
 from sim2d import unicycle_model
 import numpy
 
-sim = Sim2D()
+sim = Sim2D(render=False)
 sim.frequency = 25
 sim.set_track('track.json')
 
@@ -27,4 +27,4 @@ while not sim.done:
     # first_player_state = sim.players[0].current_state
     # print("x: {:.2f}, y: {:.2f}, theta: {:.2f}, v: {:.2f}".format(first_player_state[0], first_player_state[1], first_player_state[2], first_player_state[3]))
 
-    sim.tick(render=True)
+    sim.tick()
