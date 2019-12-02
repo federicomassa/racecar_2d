@@ -131,7 +131,7 @@ class Sim2D:
         if self.players[player_index].ref_trajectory != None:
             raise Exception("Calling update player on a trajectory following vehicle. Please call update_trajectory")
 
-        self.__queue_players.append((player_index, controls, *argv))
+        self.__queue_players.append((player_index, controls))
         self.__is_updated[player_index] = True
 
     def __update_player_manual(self, player_index, controls, *argv):
@@ -365,12 +365,7 @@ class Sim2D:
         # Update players in queue
         while len(self.__queue_players) != 0:
             p = self.__queue_players.pop()
-
-            # If argv are provided            
-            if len(p) == 3:
-                self.players[p[0]].update_state(p[1], 1.0/self.frequency, p[2])
-            else:
-                self.players[p[0]].update_state(p[1], 1.0/self.frequency)
+            self.players[p[0]].update_state(p[1], 1.0/self.frequency)
 
         if self.do_render:
             self.__interact()
