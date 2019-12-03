@@ -460,7 +460,40 @@ class Sim2D:
         clicked = pygame.mouse.get_pressed()
         if clicked[0]:
             self.pressed_point = self.pix2world(pygame.mouse.get_pos())
+    
+    def reset(self, player_index, race_line_index, d=0.0, dtheta=0.0, v=0.0):
+        """
+        Parameters
+        ----------
+        player_index : int
+            Index of the player to be reset
+        race_line_index : int
+            Index on the race line where to reset the player
+        d : float
+            Transversal distance with respect to race line
+        v : float
+            Starting speed
+        dtheta: float
+            Deviation from tangent to the race line (positive counter-clockwise)
+        """
 
+        if len(self.players) == 0:
+            return
+
+        if race_line_index != (len(self.race_line) - 1):
+            next_index = race_line_index + 1
+        else:
+            next_index = 0
+        
+        x = self.race_line[race_line_index][0]
+        y = self.race_line[race_line_index][1]
+
+        next_x = self.race_line[next_index][0]
+        next_y = self.race_line[next_index][1]
+
+        theta = np.arctan2(next_y - y, next_x - x) + dtheta
+        self.players[0].current_state = [x - d*np.sin(theta), y + d*np.cos(theta), theta, v]
+        self.current_time = 0.0
 
     def __sleep(self):
         if self.do_render:
