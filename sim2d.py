@@ -5,6 +5,7 @@ import numpy as np
 import csv
 import time
 from collections import deque
+from scipy.spatial import Delaunay
 
 class TrajectoryPoint:
     def __init__(self, x=None, y=None, v=None):
@@ -258,6 +259,79 @@ class Sim2D:
         self.race_line, self.ins_line, self.out_line = json_parser.json_parser(track_json_path, 1)
         self.origin = (self.race_line[0][0], self.race_line[0][1])
 
+        # Setup Delaunay triangulation to infer if a point is inside or outside the track boundaries
+        points = []
+        for x in self.ins_line:
+            points.append([x[0], x[1]])
+        for x in self.out_line:
+            points.append([x[0], x[1]])
+
+        points = np.array(points)
+
+        t = Delaunay(points)
+        self.delaunay_triangles = points[self.__clean_triangles(t.simplices.copy())]
+
+    def is_inside_track(self, point):
+        """
+        Checks if a point lies inside the track
+
+        Parameters
+        ----------
+        point : list or tuple
+            Point to be checked
+
+        Returns
+        ----------
+        bool: True if point is inside the track
+        """
+
+        is_inside_track = False
+
+        for triangle in self.delaunay_triangles:
+            if Sim2D.is_inside_triangle(point, triangle):
+                is_inside_track = True
+                break
+
+        return is_inside_track
+
+    @staticmethod
+    def is_inside_triangle(point, triangle):
+        """
+        Checks if a point (x,y) lies inside a triangle ((x0,y0), (x1,y1), (x2,y2))
+
+        Returns
+        ---------
+        bool
+        """
+        t1 = triangle[0]
+        t2 = triangle[1]
+        t3 = triangle[2]
+        c1 = (t2[0]-t1[0])*(point[1]-t1[1])-(t2[1]-t1[1])*(point[0]-t1[0])
+        c2 = (t3[0]-t2[0])*(point[1]-t2[1])-(t3[1]-t2[1])*(point[0]-t2[0])
+        c3 = (t1[0]-t3[0])*(point[1]-t3[1])-(t1[1]-t3[1])*(point[0]-t3[0])
+        if (c1<0 and c2<0 and c3<0) or (c1>0 and c2>0 and c3>0):
+            return True
+        else:
+            return False
+
+    def __clean_triangles(self, triangles):
+        """
+        Cleans Delaunay triangles assuming the points were ordered appending outside line points to inside line points
+        """
+        clean_triangles = []
+        n_ins_points = len(self.ins_line)
+
+        for t in triangles:
+            # Remove triangles formed only of inside or outside points
+            if t[0] < n_ins_points and t[1] < n_ins_points and t[2] < n_ins_points:
+                continue
+            if t[0] >= n_ins_points and t[1] >= n_ins_points and t[2] >= n_ins_points:
+                continue
+                
+            clean_triangles.append([t[0], t[1], t[2]])
+
+        return np.array(clean_triangles)
+
     def set_model(self, player_index, model_fcn):
         self.players[player_index].model_fcn = model_fcn
 
@@ -383,6 +457,7 @@ class Sim2D:
         # Reset
         for player in self.players:
             player.__is_updated = False
+        
 
     def __interact(self):
         for event in pygame.event.get():

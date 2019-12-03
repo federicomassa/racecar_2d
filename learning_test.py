@@ -2,17 +2,20 @@ from racecar_2d import *
 import numpy
 
 sim = Sim2D(render=True)
-sim.frequency = 25
+sim.frequency = 1
 sim.set_track('track.json')
 
-init_pose = []
-init_pose.append((sim.race_line[0][0], sim.race_line[0][1], 0.0, 0.0))
-init_pose.append((sim.race_line[10][0], sim.race_line[10][1], 0.0, 0.0))
-init_pose.append((sim.race_line[20][0], sim.race_line[20][1], 0.0, 0.0))
-
 sim.add_player('Acura_NSX_red.png', 4.4, unicycle_model, init_pose[0])
+rand_index = np.random.randint(0, len(sim.race_line))
+sim.reset(0, rand_index)
 
+
+counter = 0
 while not sim.done:
+    if counter % 120 == 0:
+        rand_index = np.random.randint(0, len(sim.race_line))
+        sim.reset(rand_index)
+
     sim.update_player(0, (1,0.1))
     
     # first_player_state = sim.players[0].current_state
@@ -20,9 +23,4 @@ while not sim.done:
 
     sim.tick()
 
-    # DEBUG
-    point = (sim.players[0].current_state[0], sim.players[0].current_state[1])
-    if not sim.is_inside_track(point):
-        print("OUTSIDE!")
-    else:
-        print("INSIDE!")
+    counter += 1
