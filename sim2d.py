@@ -69,6 +69,24 @@ def unicycle_model(current_state, controls, time_step, *argv):
 
     return new_state
 
+def forward_unicycle_model(current_state, controls, time_step, *argv):
+    if len(current_state) != 4:
+        raise Exception("current_state must be of length 4: x,y,theta,v")
+    if len(controls) != 2:
+        raise Exception("controls must be of length 2: v, omega")
+
+    new_state = current_state
+    new_state[0] += current_state[3]*np.cos(current_state[2])*time_step
+    new_state[1] += current_state[3]*np.sin(current_state[2])*time_step
+    new_state[2] += controls[1]*time_step
+    new_state[3] += controls[0]*time_step
+
+    # Constrain to forward-only motion
+    if new_state[3] < 0.0:
+        new_state[3] = 0.0
+
+    return new_state
+
 class Sim2D:
     def __init__(self, render=True, real_time=True):
         self.done = False
@@ -98,6 +116,8 @@ class Sim2D:
         self.clicked_point = None
         self.pressed_point = None
         self.__queue_paths = None
+        self.__queue_points = []
+        self.__queue_persistent_points = []
         self.__queue_players = deque()
 
         if self.do_render:
@@ -417,6 +437,11 @@ class Sim2D:
                 pygame.draw.line(self.screen, color, path_pix[i], path_pix[i+1], self.track_pix_size)
                 pygame.draw.circle(self.screen, color, path_pix[i+1], 2*self.track_pix_size)
 
+    def draw_point(self, point, color=(255,0,0), size=5, persistent=False):
+        if self.do_render and persistent:
+            self.__queue_persistent_points.append((point, color, size))
+        elif self.do_render and not persistent:
+            self.__queue_points.append((point, color, size))
 
     def draw_path(self, path, color=(0,0,255)):
         assert len(path) > 2
@@ -449,6 +474,14 @@ class Sim2D:
         if self.__queue_paths != None:
             self.render_paths()
             self.__queue_paths = None
+
+        for point in self.__queue_points:
+            pygame.draw.circle(self.screen, point[1], self.world2pix(point[0]), point[2])
+
+        for point in self.__queue_persistent_points:
+            pygame.draw.circle(self.screen, point[1], self.world2pix(point[0]), point[2])
+
+        self.__queue_points = []
 
     def tick(self):
         # Check if all vehicles were updated
@@ -582,6 +615,8 @@ class Sim2D:
         theta = np.arctan2(next_y - y, next_x - x) + dtheta
         self.players[0].current_state = [x - d*np.sin(theta), y + d*np.cos(theta), theta, v]
         self.current_time = 0.0
+
+        self.__queue_persistent_points = []
 
     def __sleep(self):
         if self.do_render:
