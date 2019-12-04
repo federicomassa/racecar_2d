@@ -1,14 +1,16 @@
 from racecar_2d import *
+from ddpg import *
 import numpy
 
 sim = Sim2D(render=True)
-sim.frequency = 1
+sim.frequency = 25
 sim.set_track('track.json')
 
 sim.add_player('Acura_NSX_red.png', 4.4, unicycle_model, init_pose[0])
 rand_index = np.random.randint(0, len(sim.race_line))
 sim.reset(0, rand_index)
 
+ddpg = DDPG(6, 2)
 
 counter = 0
 while not sim.done:

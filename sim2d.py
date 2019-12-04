@@ -32,7 +32,7 @@ class Player:
     def update_state(self, controls, dT, *argv):
         self.current_state = self.model_fcn(self.current_state, controls, dT, *argv)
 
-    def set_trajectory(self, csv_file):
+    def set_csv_trajectory(self, csv_file):
         trajectory = []
 
         with open(csv_file) as csvfile:
@@ -44,6 +44,16 @@ class Player:
         
         # Not temporized
         self.ref_trajectory = trajectory
+        self.index_ref_trajectory = 0
+
+    def set_trajectory(self, trajectory):
+        assert isinstance(trajectory, list) or isinstance(trajectory, tuple)
+        assert len(trajectory) != 0
+        assert isinstance(trajectory[0], TrajectoryPoint)
+
+        self.ref_trajectory = trajectory
+        self.index_ref_trajectory = 0
+
 
 def unicycle_model(current_state, controls, time_step, *argv):
     if len(current_state) != 4:
@@ -124,8 +134,11 @@ class Sim2D:
         self.__is_updated = []
 
 
-    def set_trajectory(self, player_index, csv_file):
-        self.players[player_index].set_trajectory(csv_file)
+    def set_csv_trajectory(self, player_index, csv_file):
+        self.players[player_index].set_csv_trajectory(csv_file)
+
+    def set_trajectory(self, player_index, trajectory):
+        self.players[player_index].set_trajectory(trajectory)
 
     def update_player(self, player_index, controls, *argv):
         # If manual mode ignore controls from outside

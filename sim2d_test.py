@@ -20,7 +20,6 @@ while not sim.done:
 
     sim.tick()
 
-    # DEBUG
     point = (sim.players[0].current_state[0], sim.players[0].current_state[1])
     if not sim.is_inside_track(point):
         print("OUTSIDE!")
