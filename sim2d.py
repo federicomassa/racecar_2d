@@ -136,6 +136,9 @@ class Sim2D:
         self.__is_updated = []
 
     def display_on(self):
+        if self.__do_render:
+            return
+        
         self.__do_render = True
         self.screen = pygame.display.set_mode((1200,800))
         pygame.display.set_caption('TazioSim 2D')
@@ -157,6 +160,9 @@ class Sim2D:
         self.manual_model_fcn = unicycle_model
 
     def display_off(self):
+        if not self.__do_render:
+            return
+        
         self.__do_render = False
         pygame.quit()
         self.screen = None
@@ -508,7 +514,8 @@ class Sim2D:
 
     def tick(self):
         for i in range(len(self.__is_updated)):
-            print("WARNING: Player {} was not updated. Staying still.".format(i))
+            if not self.__is_updated:
+                print("WARNING: Player {} was not updated. Staying still.".format(i))
     
         # Update players in queue
         while len(self.__queue_players) != 0:
