@@ -473,16 +473,23 @@ class Sim2D:
             self.__queue_points.append((point, color, size))
 
     def draw_path(self, path, color=(0,0,255)):
-        assert len(path) > 2
+        assert isinstance(path, list) or isinstance(path, tuple)
+        path_t = []
+
+        if isinstance(path[0], TrajectoryPoint):
+            for p in path:
+                path_t.append(p.x, p.y)
+        else:
+            path_t = path
 
         path_pix = []
-        for t in path:
+        for t in path_t:
             path_pix.append(self.world2pix(t))
 
         if self.__queue_paths == None:
             self.__queue_paths = []
 
-        self.__queue_paths.append((path_pix, color))
+        self.__queue_paths.append((path_pix, color))    
 
     @staticmethod
     def get_image(path):        
