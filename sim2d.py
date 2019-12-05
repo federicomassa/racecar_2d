@@ -121,7 +121,7 @@ class Sim2D:
         self.__queue_players = deque()
 
         if self.__do_render:
-            self.initialize_graphics()
+            self.display_on()
 
         self.current_time = 0.0
         self.track_json_path = None
