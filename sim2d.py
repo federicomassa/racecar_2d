@@ -478,7 +478,7 @@ class Sim2D:
 
         if isinstance(path[0], TrajectoryPoint):
             for p in path:
-                path_t.append(p.x, p.y)
+                path_t.append([p.x, p.y])
         else:
             path_t = path
 
