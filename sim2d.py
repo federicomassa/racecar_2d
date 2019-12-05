@@ -136,7 +136,7 @@ class Sim2D:
         self.__is_updated = []
 
     def display_on(self):
-        if self.__do_render:
+        if self.screen != None:
             return
         
         self.__do_render = True
@@ -160,7 +160,7 @@ class Sim2D:
         self.manual_model_fcn = unicycle_model
 
     def display_off(self):
-        if not self.__do_render:
+        if self.screen == None:
             return
         
         self.__do_render = False
