@@ -91,7 +91,7 @@ class Sim2D:
     def __init__(self, render=True, real_time=True):
         self.done = False
         # If render to screen or play in background
-        self.do_render = render
+        self.__do_render = render
 
         # If the simulator should sleep before iterations to maintain desired frequency or not
         if render and not real_time:
@@ -120,26 +120,8 @@ class Sim2D:
         self.__queue_persistent_points = []
         self.__queue_players = deque()
 
-        if self.do_render:
-            self.screen = pygame.display.set_mode((1200,800))
-            pygame.display.set_caption('TazioSim 2D')
-            self.clock = pygame.time.Clock()
-            self.track_pix_size = 5
-            self.background_color = (255, 255, 255)
-            self.track_color = (0,0,0)
-            self.font_color = (0,0,0)
-            pygame.init()
-            self.__font = pygame.font.Font('freesansbold.ttf', 32)
-            
-            self.scale = 0.05 # m/pixel
-            self.zoom_action = 0.9 # Relative increase in scale on scroll
-            self.is_manual = False
-            self.origin = (0.0,0.0)
-            self.manual_acc_control = 0.8
-            self.manual_brake_control = 1.0
-            self.manual_steer_control = 1.0
-            self.manual_model_fcn = unicycle_model
-
+        if self.__do_render:
+            self.initialize_graphics()
 
         self.current_time = 0.0
         self.track_json_path = None
@@ -153,6 +135,47 @@ class Sim2D:
         self.players = []
         self.__is_updated = []
 
+    def display_on(self):
+        self.__do_render = True
+        self.screen = pygame.display.set_mode((1200,800))
+        pygame.display.set_caption('TazioSim 2D')
+        self.clock = pygame.time.Clock()
+        self.track_pix_size = 5
+        self.background_color = (255, 255, 255)
+        self.track_color = (0,0,0)
+        self.font_color = (0,0,0)
+        pygame.init()
+        self.__font = pygame.font.Font('freesansbold.ttf', 32)
+        
+        self.scale = 0.05 # m/pixel
+        self.zoom_action = 0.9 # Relative increase in scale on scroll
+        self.is_manual = False
+        self.origin = (0.0,0.0)
+        self.manual_acc_control = 0.8
+        self.manual_brake_control = 1.0
+        self.manual_steer_control = 1.0
+        self.manual_model_fcn = unicycle_model
+
+    def display_off(self):
+        self.__do_render = False
+        pygame.quit()
+        self.screen = None
+        
+        self.clock = None
+        self.track_pix_size = None
+        self.background_color = None
+        self.track_color = None
+        self.font_color = None
+        self.__font = None
+        
+        self.scale = None
+        self.zoom_action = None
+        self.is_manual = False
+        self.origin = None
+        self.manual_acc_control = None
+        self.manual_brake_control = None
+        self.manual_steer_control = None
+        self.manual_model_fcn = None
 
     def set_csv_trajectory(self, player_index, csv_file):
         self.players[player_index].set_csv_trajectory(csv_file)
@@ -438,9 +461,9 @@ class Sim2D:
                 pygame.draw.circle(self.screen, color, path_pix[i+1], 2*self.track_pix_size)
 
     def draw_point(self, point, color=(255,0,0), size=5, persistent=False):
-        if self.do_render and persistent:
+        if self.__do_render and persistent:
             self.__queue_persistent_points.append((point, color, size))
-        elif self.do_render and not persistent:
+        elif self.__do_render and not persistent:
             self.__queue_points.append((point, color, size))
 
     def draw_path(self, path, color=(0,0,255)):
@@ -484,16 +507,15 @@ class Sim2D:
         self.__queue_points = []
 
     def tick(self):
-        # Check if all vehicles were updated
-        all_updated = not any([not u for u in self.__is_updated])
-        assert all_updated
+        for i in range(len(self.__is_updated)):
+            print("WARNING: Player {} was not updated. Staying still.".format(i))
     
         # Update players in queue
         while len(self.__queue_players) != 0:
             p = self.__queue_players.pop()
             self.players[p[0]].update_state(p[1], 1.0/self.frequency)
 
-        if self.do_render:
+        if self.__do_render:
             self.__interact()
             self.render()
             pygame.display.flip()  
@@ -509,6 +531,7 @@ class Sim2D:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.done = True
+                pygame.quit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 4:
                     # Scroll up
@@ -619,7 +642,7 @@ class Sim2D:
         self.__queue_persistent_points = []
 
     def __sleep(self):
-        if self.do_render:
+        if self.__do_render:
             return self.clock.tick(self.frequency)/1000.0
         else:
             if self.real_time:
