@@ -13,6 +13,13 @@ class TrajectoryPoint:
         self.y = y
         self.v = v
 
+class Line:
+    def __init__(self, x1, y1, x2, y2):
+        self.x1 = x1
+        self.x2 = x2
+        self.y1 = y1
+        self.y2 = y2    
+
 class Player:
     def __init__(self, player_index, image_path, length, model_fcn):
         self.image = Sim2D.get_image(image_path)
@@ -117,6 +124,7 @@ class Sim2D:
         self.pressed_point = None
         self.__queue_paths = None
         self.__queue_points = []
+        self.__queue_lines = []
         self.__queue_persistent_points = []
         self.__queue_players = deque()
 
@@ -135,11 +143,41 @@ class Sim2D:
         self.players = []
         self.__is_updated = []
 
+    def test_laser(self, index_hint=-1, interval=-1):
+        assert len(self.players) != 0
+
+        laser_angles = [-np.pi/6.0, 0.0, np.pi/6.0] # rad
+        laser_resolution = 0.2 # m
+        laser_range = 10.0 # m
+
+        for laser_angle in laser_angles:
+            angle = self.players[0].current_state[2] + laser_angle
+            point1 = [self.players[0].current_state[0], self.players[0].current_state[1]]
+
+            # Bisect. WARNING if two sides of the track are very close this could give problems! U-turn for example
+            bisect_count = int(np.ceil(np.log2(laser_range/laser_resolution)))
+            distance = laser_range/2.0
+
+            point2 = [point1[0] + np.cos(angle)*distance, point1[1] + np.sin(angle)*distance]
+            for i in range(bisect_count):
+                if self.is_inside_track(point2, index_hint, interval):
+                    point1 = point2
+                    point2[0] = point1[0] + np.cos(angle)*distance 
+                    point2[1] = point1[1] + np.sin(angle)*distance
+                else:
+                    point2[0] = (point1[0] + point2[0])/2.0
+                    point2[1] = (point1[1] + point2[1])/2.0
+
+                distance /= 2.0
+                
+            self.__queue_lines.append(Line(self.players[0].current_state[0], self.players[0].current_state[1], point1[0], point1[1]))
+
     def display_on(self):
         if self.screen != None:
             return
         
         self.__do_render = True
+        self.real_time = True
         self.screen = pygame.display.set_mode((1200,800))
         pygame.display.set_caption('TazioSim 2D')
         self.clock = pygame.time.Clock()
@@ -159,11 +197,12 @@ class Sim2D:
         self.manual_steer_control = 1.0
         self.manual_model_fcn = unicycle_model
 
-    def display_off(self):
+    def display_off(self, real_time=True):
         if self.screen == None:
             return
         
         self.__do_render = False
+        self.real_time = real_time
         pygame.quit()
         self.screen = None
         
@@ -182,6 +221,9 @@ class Sim2D:
         self.manual_brake_control = None
         self.manual_steer_control = None
         self.manual_model_fcn = None
+        self.__queue_points = []
+        self.__queue_lines = []
+        self.__queue_persistent_points = []
 
     def set_csv_trajectory(self, player_index, csv_file):
         self.players[player_index].set_csv_trajectory(csv_file)
@@ -321,8 +363,16 @@ class Sim2D:
         self.race_line, self.ins_line, self.out_line = json_parser.json_parser(track_json_path, 1)
         self.origin = (self.race_line[0][0], self.race_line[0][1])
 
+        if self.race_line[len(self.race_line)-1] == self.race_line[0]:
+            self.race_line.pop()
+        if self.ins_line[len(self.ins_line)-1] == self.ins_line[0]:
+            self.ins_line.pop()
+        if self.out_line[len(self.out_line)-1] == self.out_line[0]:
+            self.out_line.pop()
+        
+
         # Setup Delaunay triangulation to infer if a point is inside or outside the track boundaries
-        points = []
+        points = [] 
         for x in self.ins_line:
             points.append([x[0], x[1]])
         for x in self.out_line:
@@ -333,7 +383,190 @@ class Sim2D:
         t = Delaunay(points)
         self.delaunay_triangles = points[self.__clean_triangles(t.simplices.copy())]
 
-    def is_inside_track(self, point):
+        self.__curvilinear_abscissa = self.__compute_curvilinear_abscissa(self.race_line)
+        
+        # Compute centers of each triangle in delaunay triangles
+        delaunay_centers = [((t[0][0] + t[1][0] + t[2][0])/3.0, \
+            (t[0][1] + t[1][1] + t[2][1])/3.0) for t in self.delaunay_triangles]
+
+        # Compute curvilinear abscissa of each triangle center
+        delaunay_s = [self.get_track_coordinates(p)[0] for p in delaunay_centers]
+
+        # Get sorting order
+        sorting_indices = np.argsort(delaunay_s)
+
+        # Sort delaunay triangles 
+        self.delaunay_triangles = [self.delaunay_triangles[i] for i in sorting_indices]
+
+
+    def __compute_curvilinear_abscissa(self, ref_line):
+        """
+        Integrates length of a reference line
+        
+        Parameters:
+        -------------
+        ref_line: list or tuple of points (list or tuple of 2D coordinates)
+
+        Returns:
+        list:
+            list of same length of ref_line that contains the incremental length of the curve
+        """
+
+        s = []
+        s.append(0.0)
+        for i in range(1, len(ref_line)):
+            s.append(s[i-1] + np.sqrt(np.square(ref_line[i][0] - ref_line[i-1][0]) + np.square(ref_line[i][1] - ref_line[i-1][1])))
+
+        return s
+
+    def get_track_coordinates(self, point):
+        """
+        Transform point from global coordinates (x,y) to local (s,d) using the curvilinear abscissa computed on racing line
+
+        Parameters:
+        -------------
+        point: point in global coordinates (tuple of 2 floats)
+
+        Returns:
+        ---------------
+            point in local coordinates (tuple of 2 floats)
+        """
+        local_point = [None, None]
+
+        dist2 = [np.square(point[0]-self.race_line[i][0]) + np.square(point[1]-self.race_line[i][1]) for i in range(len(self.race_line))]
+        min_dist_index = np.argmin(dist2)
+
+        next_index = min_dist_index + 1
+        prev_index = min_dist_index - 1
+        # Out of bounds case
+        if next_index == len(self.race_line):
+            next_index = 0
+        if prev_index == -1:
+            prev_index = len(self.race_line)-1
+
+        prev_to_point = [point[0] - self.race_line[prev_index][0], point[1] - self.race_line[prev_index][1]]
+        prev_to_current = [self.race_line[min_dist_index][0] - self.race_line[prev_index][0], self.race_line[min_dist_index][1] - self.race_line[prev_index][1]]
+
+        product = np.dot(prev_to_point, prev_to_current)
+        if product < 0:
+            raise Exception("Product < 0 WHY?")
+        if self.__get_curvilinear_distance(prev_index, min_dist_index) < product:
+            current_to_point = [point[0] - self.race_line[min_dist_index][0], point[1] - self.race_line[min_dist_index][1]]
+            current_to_next = [self.race_line[next_index][0] - self.race_line[min_dist_index][0], self.race_line[next_index][1] - self.race_line[min_dist_index][1]]
+            
+            product = np.dot(current_to_point, current_to_next)
+            if self.__get_curvilinear_distance(min_dist_index, next_index) < product:
+                raise Exception("WTF is going on")
+            if product < 0:
+                raise Exception("Product < 0 WHY?")
+        
+            actual_prev_index = min_dist_index
+            actual_next_index = next_index
+        else:
+            actual_prev_index = prev_index
+            actual_next_index = min_dist_index
+
+        local_point[0] = self.__curvilinear_abscissa[actual_prev_index] + product
+        
+        race_theta = np.arctan2(self.race_line[actual_next_index][1] - self.race_line[actual_prev_index][1], self.race_line[actual_next_index][0] - self.race_line[actual_prev_index][0])
+        point_theta = np.arctan2(point[1] - self.race_line[actual_prev_index][1], point[0] - self.race_line[actual_prev_index][0])
+
+        theta = point_theta - race_theta
+        actual_prev_to_point = np.sqrt(np.square(point[0] - self.race_line[actual_prev_index][0]) + np.square(point[1] - self.race_line[actual_prev_index][1]))
+
+        local_point[1] = actual_prev_to_point*np.sin(theta)
+
+        return local_point
+            
+    def __get_curvilinear_distance(self, index1, index2):
+        dist = self.__curvilinear_abscissa[index2] - self.__curvilinear_abscissa[index1]
+        track_length = self.__curvilinear_abscissa[len(self.__curvilinear_abscissa)-1]
+
+        if index2 == 0 and index1 == len(self.race_line)-1:
+            dist = np.sqrt(np.square(self.race_line[0][0]-self.race_line[len(self.race_line)-1][0]) + np.square(self.race_line[0][1]-self.race_line[len(self.race_line)-1][1]))
+        elif index1 == 0 and index2 == len(self.race_line)-1:
+            dist = -np.sqrt(np.square(self.race_line[0][0]-self.race_line[len(self.race_line)-1][0]) + np.square(self.race_line[0][1]-self.race_line[len(self.race_line)-1][1]))
+        elif dist > track_length/2.0:
+            dist -= track_length
+        elif dist < -track_length/2.0:
+            dist += track_length
+
+        return dist
+        
+
+    @staticmethod
+    def get_sweeping(vector, index=-1, interval=-1):
+        """
+        Helper method to retrieve a sweep order given a vector, an index hint around which to check something, possibly an interval around which to look
+        E.g. vector of len 10 --> get_sweeping(vector, 2, 4) = [2, 1, 3, 0, 4, 9, 5, 8, 6], a list of indexes that expands around the index
+
+        Parameters
+        -------------
+        vector: list or tuple
+            The vector of which to get the sweep
+        index: int, optional
+            The optional index hint around which to sweep
+        interval: int, optional (if index is not provided this is not used)
+            Interval around the index
+        """
+
+        index_provided = index >= 0
+        interval_provided = interval >= 0
+
+        sweep = []
+        if not index_provided and not interval_provided:
+            sweep = [i for i in range(len(vector))]
+        elif index_provided:
+            # How many points does the sweep contain? Interval is on the left and on the right of the index
+            if interval_provided:
+                npoints = interval*2 + 1
+            else:
+                npoints = len(vector)
+
+            current_index = index
+            current_step = 1
+            current_sign = -1
+            sweep.append(current_index)
+            for i in range(npoints-1):
+                current_index += current_step*current_sign
+                current_step += 1
+                current_sign = -current_sign
+                
+                actual_index = current_index
+                if current_index < 0:
+                    actual_index = len(vector) + current_index
+                elif current_index >= len(vector):
+                    actual_index = current_index - len(vector)
+
+                sweep.append(actual_index)
+
+        return sweep
+
+    @staticmethod
+    def is_adjacent(t1, t2):
+        """
+        WARNING this just checks if two triangles have two points in common. 
+        Parameters:
+        ------------------
+        t1: list or tuple of points (which is a tuple or list of two floats)
+            First triangle coordinates
+        t2: list or tuple of points (which is a tuple or list of two floats)
+            Second triangle coordinates
+
+        Returns:
+        -------------
+        bool: if the two triangles have two points in common
+        """
+
+        found1 = [(t1[i] in t2) for i in range(3)]
+
+        eq_points = int(found1[0]) + int(found1[1]) + int(found1[2])
+        if eq_points < 2:
+            return False
+        else:
+            return True
+
+    def is_inside_track(self, point, index_hint = -1, check_interval = -1):
         """
         Checks if a point lies inside the track
 
@@ -341,20 +574,29 @@ class Sim2D:
         ----------
         point : list or tuple
             Point to be checked
-
+        index_hint : int
+            optional, index of the triangle around which to check for inside/outside. This might be an hint from previous evaluations
+        check_interval: int
+            optional, how many triangles around index_hint to check
         Returns
         ----------
-        bool: True if point is inside the track
+        bool: 
+            True if point is inside the track
+        int: 
+            Index of the triangle, might be used as an hint for future evaluations. If bool is False, it is None
         """
 
         is_inside_track = False
-
-        for triangle in self.delaunay_triangles:
-            if Sim2D.is_inside_triangle(point, triangle):
+        triangle_index = None
+        sweep = Sim2D.get_sweeping(self.delaunay_triangles, index_hint, check_interval)
+        
+        for index in sweep:
+            if self.is_inside_triangle(point, self.delaunay_triangles[index]):
                 is_inside_track = True
+                triangle_index = index
                 break
-
-        return is_inside_track
+        
+        return is_inside_track, triangle_index
 
     @staticmethod
     def is_inside_triangle(point, triangle):
@@ -394,6 +636,27 @@ class Sim2D:
 
         return np.array(clean_triangles)
 
+    def __sort_triangles(self, triangles):
+        """
+        Sort list of triangles based on adjacency
+        """
+
+        sort_indices = []
+        sorted_triangles = []
+        sorted_triangles.append(triangles[0])
+
+        while len(sort_indices) != len(triangles):
+            current_triangle = sorted_triangles[len(sorted_triangles)-1]
+            for i in range(len(triangles)):
+                if i in sort_indices: continue
+                if self.is_adjacent(triangles[i], current_triangle):
+                    sorted_triangles.append(triangles[i])
+                    sort_indices.append(i)
+                    break
+
+        return sorted_triangles
+            
+            
     def set_model(self, player_index, model_fcn):
         self.players[player_index].model_fcn = model_fcn
 
@@ -519,6 +782,13 @@ class Sim2D:
 
         self.__queue_points = []
 
+        for line in self.__queue_lines:
+            p1 = self.world2pix([line.x1, line.y1])
+            p2 = self.world2pix([line.x2, line.y2])
+            pygame.draw.line(self.screen, (255,0,0), p1, p2, 5)
+
+        self.__queue_lines = []
+
     def tick(self):
         for i in range(len(self.__is_updated)):
             if not self.__is_updated:
@@ -531,8 +801,10 @@ class Sim2D:
 
         if self.__do_render:
             self.__interact()
-            self.render()
-            pygame.display.flip()  
+
+            if self.__do_render:
+                self.render()
+                pygame.display.flip()  
         
         self.current_time += self.__sleep()
 
@@ -545,7 +817,8 @@ class Sim2D:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.done = True
-                pygame.quit()
+                self.display_off()
+                return
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 4:
                     # Scroll up
