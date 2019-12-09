@@ -20,13 +20,13 @@ _, index_hint = sim.is_inside_track(init_pose[0][0:2])
 
 while not sim.done:
     sim.update_player(0, (1,0.1))
-    #sim.test_laser(index_hint, 100)
-    sweep = sim.get_sweeping(sim.delaunay_triangles, index_hint, 100)
-    for i in sweep:
-        t = sim.delaunay_triangles[i]
-        sim.draw_point(t[0])
-        sim.draw_point(t[1])
-        sim.draw_point(t[2])
+    sim.test_laser(index_hint, 100)
+    # sweep = sim.get_sweeping(sim.delaunay_triangles, index_hint, 100)
+    # for i in sweep:
+    #     t = sim.delaunay_triangles[i]
+    #     sim.draw_point(t[0])
+    #     sim.draw_point(t[1])
+    #     sim.draw_point(t[2])
 
     # first_player_state = sim.players[0].current_state
     # print("x: {:.2f}, y: {:.2f}, theta: {:.2f}, v: {:.2f}".format(first_player_state[0], first_player_state[1], first_player_state[2], first_player_state[3]))

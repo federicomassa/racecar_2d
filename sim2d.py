@@ -148,7 +148,7 @@ class Sim2D:
 
         laser_angles = [-np.pi/6.0, 0.0, np.pi/6.0] # rad
         laser_resolution = 0.2 # m
-        laser_range = 10.0 # m
+        laser_range = 20.0 # m
 
         for laser_angle in laser_angles:
             angle = self.players[0].current_state[2] + laser_angle
@@ -159,9 +159,10 @@ class Sim2D:
             distance = laser_range/2.0
 
             point2 = [point1[0] + np.cos(angle)*distance, point1[1] + np.sin(angle)*distance]
+
             for i in range(bisect_count):
-                if self.is_inside_track(point2, index_hint, interval):
-                    point1 = point2
+                if self.is_inside_track(point2, index_hint, interval)[0]:
+                    point1 = point2.copy()
                     point2[0] = point1[0] + np.cos(angle)*distance 
                     point2[1] = point1[1] + np.sin(angle)*distance
                 else:
@@ -169,7 +170,7 @@ class Sim2D:
                     point2[1] = (point1[1] + point2[1])/2.0
 
                 distance /= 2.0
-                
+
             self.__queue_lines.append(Line(self.players[0].current_state[0], self.players[0].current_state[1], point1[0], point1[1]))
 
     def display_on(self):
