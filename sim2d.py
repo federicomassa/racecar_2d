@@ -95,7 +95,7 @@ def forward_unicycle_model(current_state, controls, time_step, *argv):
     return new_state
 
 class Sim2D:
-    def __init__(self, render=True, real_time=True):
+    def __init__(self, render=True, sort_triangles=True, real_time=True):
         self.done = False
         # If render to screen or play in background
         self.__do_render = render
@@ -127,6 +127,7 @@ class Sim2D:
         self.__queue_lines = []
         self.__queue_persistent_points = []
         self.__queue_players = deque()
+        self.__do_triangle_sorting = sort_triangles
 
         if self.__do_render:
             self.display_on()
@@ -144,6 +145,7 @@ class Sim2D:
         self.__is_updated = []
 
     def test_laser(self, index_hint=-1, interval=-1):
+        assert self.__do_triangle_sorting
         assert len(self.players) != 0
 
         laser_angles = [-np.pi/6.0, 0.0, np.pi/6.0] # rad
@@ -280,6 +282,8 @@ class Sim2D:
                 delta_s = np.sqrt(np.square(traj[i+1].y-player.current_state[1]) + np.square(traj[i+1].x-player.current_state[0]))
                 a = (np.square(traj[i+1].v) - np.square(player.current_state[3]))/(2*delta_s)
                 if np.abs(a) < 0.0001:
+                    if traj[i].v < 0.0001:
+                        raise Exception("Trajectory has too low acceleration and velocity")
                     delta_t = delta_s/traj[i].v
                 else:
                     delta_t = (traj[i+1].v-player.current_state[3])/a
@@ -287,6 +291,8 @@ class Sim2D:
                 delta_s = np.sqrt(np.square(traj[i+1].y-traj[i].y) + np.square(traj[i+1].x-traj[i].x))
                 a = (np.square(traj[i+1].v) - np.square(traj[i].v))/(2*delta_s)
                 if np.abs(a) < 0.0001:
+                    if traj[i].v < 0.0001:
+                        raise Exception("Trajectory has too low acceleration and velocity")
                     delta_t = delta_s/traj[i].v
                 else:
                     delta_t = (traj[i+1].v-traj[i].v)/a
@@ -384,20 +390,21 @@ class Sim2D:
         t = Delaunay(points)
         self.delaunay_triangles = points[self.__clean_triangles(t.simplices.copy())]
 
-        self.__curvilinear_abscissa = self.__compute_curvilinear_abscissa(self.race_line)
-        
-        # Compute centers of each triangle in delaunay triangles
-        delaunay_centers = [((t[0][0] + t[1][0] + t[2][0])/3.0, \
-            (t[0][1] + t[1][1] + t[2][1])/3.0) for t in self.delaunay_triangles]
+        if self.__do_triangle_sorting:
+            self.__curvilinear_abscissa = self.__compute_curvilinear_abscissa(self.race_line)
+            
+            # Compute centers of each triangle in delaunay triangles
+            delaunay_centers = [((t[0][0] + t[1][0] + t[2][0])/3.0, \
+                (t[0][1] + t[1][1] + t[2][1])/3.0) for t in self.delaunay_triangles]
 
-        # Compute curvilinear abscissa of each triangle center
-        delaunay_s = [self.get_track_coordinates(p)[0] for p in delaunay_centers]
+            # Compute curvilinear abscissa of each triangle center
+            delaunay_s = [self.get_track_coordinates(p)[0] for p in delaunay_centers]
 
-        # Get sorting order
-        sorting_indices = np.argsort(delaunay_s)
+            # Get sorting order
+            sorting_indices = np.argsort(delaunay_s)
 
-        # Sort delaunay triangles 
-        self.delaunay_triangles = [self.delaunay_triangles[i] for i in sorting_indices]
+            # Sort delaunay triangles 
+            self.delaunay_triangles = [self.delaunay_triangles[i] for i in sorting_indices]
 
 
     def __compute_curvilinear_abscissa(self, ref_line):
