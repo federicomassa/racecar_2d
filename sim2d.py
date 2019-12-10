@@ -152,26 +152,24 @@ class Sim2D:
         laser_resolution = 0.2 # m
         laser_range = 20.0 # m
 
+        current_point = self.players[0].current_state[0:2]
+        inside, init_index = self.is_inside_track(current_point, index_hint, interval)
+        if not inside:
+            return
+
         for laser_angle in laser_angles:
             angle = self.players[0].current_state[2] + laser_angle
-            point1 = [self.players[0].current_state[0], self.players[0].current_state[1]]
+            point1 = current_point.copy()
 
-            # Bisect. WARNING if two sides of the track are very close this could give problems! U-turn for example
-            bisect_count = int(np.ceil(np.log2(laser_range/laser_resolution)))
-            distance = laser_range/2.0
-
-            point2 = [point1[0] + np.cos(angle)*distance, point1[1] + np.sin(angle)*distance]
-
-            for i in range(bisect_count):
-                if self.is_inside_track(point2, index_hint, interval)[0]:
-                    point1 = point2.copy()
-                    point2[0] = point1[0] + np.cos(angle)*distance 
-                    point2[1] = point1[1] + np.sin(angle)*distance
-                else:
-                    point2[0] = (point1[0] + point2[0])/2.0
-                    point2[1] = (point1[1] + point2[1])/2.0
-
-                distance /= 2.0
+            # Linear search. Robust but slower than bisect (O(n) instead of O(log(n)))
+            linear_count = int(np.ceil(laser_range/laser_resolution))
+            last_index = init_index
+            for i in range(linear_count):
+                point1[0] = point1[0] + np.cos(angle)*laser_resolution
+                point1[1] = point1[1] + np.sin(angle)*laser_resolution
+                is_inside, last_index = self.is_inside_track(point1, last_index, 10)
+                if not is_inside:
+                    break
 
             self.__queue_lines.append(Line(self.players[0].current_state[0], self.players[0].current_state[1], point1[0], point1[1]))
 
