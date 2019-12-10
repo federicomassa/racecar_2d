@@ -6,6 +6,7 @@ import csv
 import time
 from collections import deque
 from scipy.spatial import Delaunay
+from abc import ABC, abstractmethod
 
 class TrajectoryPoint:
     def __init__(self, x=None, y=None, v=None):
@@ -20,6 +21,75 @@ class Line:
         self.y1 = y1
         self.y2 = y2    
 
+class Sensor(ABC):
+    @abstractmethod
+    def simulate(self):
+        pass
+
+
+class SensorLaser(Sensor):
+    def __init__(self, simulator, angles, laser_range):
+        """
+        Parameters:
+        simulator: Sim2D instance
+        angles: list or tuple of floats
+            rays angles
+        laser_range: float
+            maximum laser reading
+        """
+    
+        assert simulator != None
+        assert isinstance(angles, tuple) or isinstance(angles, list)
+        assert len(angles) != 0
+        assert isinstance(angles[0], float)
+        assert isinstance(laser_range, float)
+
+        self.simulator = simulator
+        self.angles = angles
+        self.range = laser_range
+
+    def simulate(self):
+        """
+        Returns
+        -----------
+        list: 
+            a list of sensor readings, one for each angle in angles
+        """
+
+        assert simulator.__do_triangle_sorting
+        assert len(simulator.players) != 0
+
+        readings = []
+
+        laser_angles = [-np.pi/6.0, 0.0, np.pi/6.0] # rad
+        laser_resolution = 0.2 # m
+        laser_range = 20.0 # m
+
+        current_point = self.players[0].current_state[0:2]
+        inside, init_index = self.is_inside_track(current_point, index_hint, interval)
+        if not inside:
+            return
+
+        for laser_angle in laser_angles:
+            angle = self.players[0].current_state[2] + laser_angle
+            point1 = current_point.copy()
+
+            # Linear search. Robust but slower than bisect (O(n) instead of O(log(n)))
+            linear_count = int(np.ceil(laser_range/laser_resolution))
+            last_index = init_index
+            for i in range(linear_count):
+                point1[0] = point1[0] + np.cos(angle)*laser_resolution
+                point1[1] = point1[1] + np.sin(angle)*laser_resolution
+                is_inside, last_index = self.is_inside_track(point1, last_index, 10)
+                if not is_inside:
+                    break
+
+            distance = np.sqrt(np.square(point1[0] - current_point[0]) + np.square(point1[1] - current_point[1]))
+            readings.append((laser_angle, distance))
+
+        return readings
+
+
 class Player:
     def __init__(self, player_index, image_path, length, model_fcn):
         self.image = Sim2D.get_image(image_path)
@@ -30,6 +100,7 @@ class Player:
         self.current_state = None
         self.ref_trajectory = None
         self.index_ref_trajectory = 0
+        self.sensors = {}
 
     def init_state(self, state):
         assert isinstance(state, list) or isinstance(state, tuple)
@@ -60,6 +131,15 @@ class Player:
 
         self.ref_trajectory = trajectory
         self.index_ref_trajectory = 0
+
+    def add_sensor(self, name, sensor):
+        assert sensor != None
+        self.sensors[name] = sensor
+
+    def get_sensor_readings(self, name):
+        assert name in self.sensors
+        return self.sensors[name].simulate()    
+
 
 
 def unicycle_model(current_state, controls, time_step, *argv):
@@ -404,6 +484,8 @@ class Sim2D:
             # Sort delaunay triangles 
             self.delaunay_triangles = [self.delaunay_triangles[i] for i in sorting_indices]
 
+    def add_sensor(self, player_index, name, sensor):
+        self.players[player_index].add_sensor(name, sensor)
 
     def __compute_curvilinear_abscissa(self, ref_line):
         """
@@ -548,30 +630,6 @@ class Sim2D:
 
         return sweep
 
-    @staticmethod
-    def is_adjacent(t1, t2):
-        """
-        WARNING this just checks if two triangles have two points in common. 
-        Parameters:
-        ------------------
-        t1: list or tuple of points (which is a tuple or list of two floats)
-            First triangle coordinates
-        t2: list or tuple of points (which is a tuple or list of two floats)
-            Second triangle coordinates
-
-        Returns:
-        -------------
-        bool: if the two triangles have two points in common
-        """
-
-        found1 = [(t1[i] in t2) for i in range(3)]
-
-        eq_points = int(found1[0]) + int(found1[1]) + int(found1[2])
-        if eq_points < 2:
-            return False
-        else:
-            return True
-
     def is_inside_track(self, point, index_hint = -1, check_interval = -1):
         """
         Checks if a point lies inside the track
@@ -641,27 +699,6 @@ class Sim2D:
             clean_triangles.append([t[0], t[1], t[2]])
 
         return np.array(clean_triangles)
-
-    def __sort_triangles(self, triangles):
-        """
-        Sort list of triangles based on adjacency
-        """
-
-        sort_indices = []
-        sorted_triangles = []
-        sorted_triangles.append(triangles[0])
-
-        while len(sort_indices) != len(triangles):
-            current_triangle = sorted_triangles[len(sorted_triangles)-1]
-            for i in range(len(triangles)):
-                if i in sort_indices: continue
-                if self.is_adjacent(triangles[i], current_triangle):
-                    sorted_triangles.append(triangles[i])
-                    sort_indices.append(i)
-                    break
-
-        return sorted_triangles
-            
             
     def set_model(self, player_index, model_fcn):
         self.players[player_index].model_fcn = model_fcn

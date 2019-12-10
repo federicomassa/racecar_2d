@@ -15,12 +15,13 @@ init_pose.append((sim.race_line[10][0], sim.race_line[10][1], 0.0, 0.0))
 init_pose.append((sim.race_line[20][0], sim.race_line[20][1], 0.0, 0.0))
 
 sim.add_player('Acura_NSX_red.png', 4.4, unicycle_model, init_pose[0])
+sim.add_sensor(0, 'laser', SensorLaser(sim, (-np.pi/6.0, 0.0, np.pi/6.0), 10.0))
 
 _, index_hint = sim.is_inside_track(init_pose[0][0:2])
 
 while not sim.done:
     sim.update_player(0, (1,0.1))
-    sim.test_laser(index_hint, 100)
+    # sim.test_laser(index_hint, 100)
     # sweep = sim.get_sweeping(sim.delaunay_triangles, index_hint, 100)
     # for i in sweep:
     #     t = sim.delaunay_triangles[i]
