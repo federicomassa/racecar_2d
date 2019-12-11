@@ -28,7 +28,7 @@ class Sensor(ABC):
 
 
 class SensorLaser(Sensor):
-    def __init__(self, simulator, angles, laser_range):
+    def __init__(self, parent_player, simulator, angles, laser_range, laser_resolution):
         """
         Parameters:
         simulator: Sim2D instance
@@ -39,48 +39,56 @@ class SensorLaser(Sensor):
         """
     
         assert simulator != None
+        assert parent_player != None
         assert isinstance(angles, tuple) or isinstance(angles, list)
         assert len(angles) != 0
         assert isinstance(angles[0], float)
         assert isinstance(laser_range, float)
 
+        self.player = parent_player
         self.simulator = simulator
         self.angles = angles
         self.range = laser_range
+        self.resolution = laser_resolution
 
-    def simulate(self):
+    def simulate(self, **kwargs):
         """
+        Kwargs:
+        --------------
+        int: index_hint
+            Approximate index of current delaunay triangle. See Sim2D.is_inside_track
+        int: interval
+            Same as arg in Sim2D.is_inside_track
+
         Returns
         -----------
         list: 
             a list of sensor readings, one for each angle in angles
         """
 
-        assert simulator.__do_triangle_sorting
-        assert len(simulator.players) != 0
+        assert self.simulator.do_triangle_sorting
+
+        index_hint = kwargs.get('index_hint', -1)
+        interval = kwargs.get('interval', -1)
 
         readings = []
 
-        laser_angles = [-np.pi/6.0, 0.0, np.pi/6.0] # rad
-        laser_resolution = 0.2 # m
-        laser_range = 20.0 # m
-
-        current_point = self.players[0].current_state[0:2]
-        inside, init_index = self.is_inside_track(current_point, index_hint, interval)
+        current_point = self.player.current_state[0:2]
+        inside, init_index = self.simulator.is_inside_track(current_point, index_hint, interval)
         if not inside:
-            return
+            return readings
 
-        for laser_angle in laser_angles:
-            angle = self.players[0].current_state[2] + laser_angle
+        for laser_angle in self.angles:
+            angle = self.player.current_state[2] + laser_angle
             point1 = current_point.copy()
 
             # Linear search. Robust but slower than bisect (O(n) instead of O(log(n)))
-            linear_count = int(np.ceil(laser_range/laser_resolution))
+            linear_count = int(np.ceil(self.range/self.resolution))
             last_index = init_index
             for i in range(linear_count):
-                point1[0] = point1[0] + np.cos(angle)*laser_resolution
-                point1[1] = point1[1] + np.sin(angle)*laser_resolution
-                is_inside, last_index = self.is_inside_track(point1, last_index, 10)
+                point1[0] = point1[0] + np.cos(angle)*self.resolution
+                point1[1] = point1[1] + np.sin(angle)*self.resolution
+                is_inside, last_index = self.simulator.is_inside_track(point1, last_index, 10)
                 if not is_inside:
                     break
 
@@ -136,11 +144,9 @@ class Player:
         assert sensor != None
         self.sensors[name] = sensor
 
-    def get_sensor_readings(self, name):
-        assert name in self.sensors
-        return self.sensors[name].simulate()    
-
-
+    def simulate(self, name, **kwargs):
+        assert name in self.sensors, "Sensor {} was not registered for player {}. Please call add_sensor first.".format(name, self.id)
+        return self.sensors[name].simulate(**kwargs)    
 
 def unicycle_model(current_state, controls, time_step, *argv):
     if len(current_state) != 4:
@@ -207,7 +213,7 @@ class Sim2D:
         self.__queue_lines = []
         self.__queue_persistent_points = []
         self.__queue_players = deque()
-        self.__do_triangle_sorting = sort_triangles
+        self.do_triangle_sorting = sort_triangles
 
         if self.__do_render:
             self.display_on()
@@ -225,7 +231,7 @@ class Sim2D:
         self.__is_updated = []
 
     def test_laser(self, index_hint=-1, interval=-1):
-        assert self.__do_triangle_sorting
+        assert self.do_triangle_sorting
         assert len(self.players) != 0
 
         laser_angles = [-np.pi/6.0, 0.0, np.pi/6.0] # rad
@@ -468,7 +474,7 @@ class Sim2D:
         t = Delaunay(points)
         self.delaunay_triangles = points[self.__clean_triangles(t.simplices.copy())]
 
-        if self.__do_triangle_sorting:
+        if self.do_triangle_sorting:
             self.__curvilinear_abscissa = self.__compute_curvilinear_abscissa(self.race_line)
             
             # Compute centers of each triangle in delaunay triangles
@@ -483,9 +489,6 @@ class Sim2D:
 
             # Sort delaunay triangles 
             self.delaunay_triangles = [self.delaunay_triangles[i] for i in sorting_indices]
-
-    def add_sensor(self, player_index, name, sensor):
-        self.players[player_index].add_sensor(name, sensor)
 
     def __compute_curvilinear_abscissa(self, ref_line):
         """
