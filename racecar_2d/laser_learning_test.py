@@ -1,6 +1,10 @@
 from racecar_2d import *
 from rl_ddpg import *
 import numpy
+import sys
+
+argv = str(sys.argv)
+block_rendering = ('render=False' in argv)
 
 sim = Sim2D(render=False)
 sim.frequency = 25
@@ -53,7 +57,7 @@ for episode in range(num_episodes):
         ddpg.save(save_id)
 
     rendering = False
-    if episode % render_every == 0:
+    if not block_rendering and episode % render_every == 0:
         rendering = True
         sim.display_on()
     else:
