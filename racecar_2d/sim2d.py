@@ -6,6 +6,7 @@ import csv
 import time
 from collections import deque
 from scipy.spatial import Delaunay
+import math
 
 class TrajectoryPoint:
     def __init__(self, x=None, y=None, v=None):
@@ -387,9 +388,11 @@ class Sim2D:
                     delta_t = (traj[i+1].v-traj[i].v)/a
                 
 
-            N_steps = int(np.ceil(delta_t/t_step))
+            N_steps = np.ceil(delta_t/t_step)
             if N_steps == 0:
                 raise Exception('t_step too large')
+            if math.isnan(N_steps):
+                raise Exception('Something went wrong. N_steps is NaN')
 
             # Next one will be last iteration
             elif N_steps <= total_points*2 and i == len(traj)-2:
