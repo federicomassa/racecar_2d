@@ -1,16 +1,18 @@
 from racecar_2d import *
-from ddpg import *
+from rl_ddpg import *
 import numpy
-import pdb
-pdb.set_trace()
 
 sim = Sim2D(render=False)
 sim.frequency = 25
 sim.set_track('track.json')
 
 sim.add_player('Acura_NSX_red.png', 4.4, forward_unicycle_model, [0.0,0.0,0.0,0.0])
+player = sim.players[0]
+player.add_sensor('laser', SensorLaser(player, sim, (-np.pi/6.0, 0.0, np.pi/6.0), 20.0, 0.1))
 rand_index = np.random.randint(0, len(sim.race_line))
 
+# states: laser1, laser2, laser3, ds, d, v
+# action: acceleration, steering
 ddpg = DDPG(6, 2, noise_model='ornstein_uhlenbeck')
 
 num_episodes = 1000
@@ -21,19 +23,17 @@ a_max = 4.0
 omega_min = -1
 omega_max = 1
 
-goal_threshold = 1.0
-
 normal_reward = -1
 goal_reward = 10000
 collision_reward = -10000
+goal_threshold = 1.0
 
 # Every how many episodes save network weights
 save_every = 5
-save_id = 'test5_car'
+save_id = 'laser_test_1'
 
 # Every how many iterations train networks
 train_every = 10
-
 
 save = False
 if save_every > 0:
@@ -74,20 +74,31 @@ for episode in range(num_episodes):
 
     goal = sim.race_line[goal_index]
     sim.draw_point(goal, size=5, persistent=True)
-
-    init_goal_distance = np.sqrt(np.square(sim.players[0].current_state[0] - goal[0]) + np.square(sim.players[0].current_state[1] - goal[1]))
+    [init_s, _] = sim.get_track_coordinates(player.current_state[0:2])
+    [goal_s, _] = sim.get_track_coordinates(goal)
+    
     tot_reward = 0
 
+    inside, index_hint = sim.is_inside_track(player.current_state[0:2])
+    if not inside:
+        raise Exception("Player is not inside track at the beginning of episode {}".format(episode))
+
+    new_readings = None
     for iteration in range(episode_length):
+
         if is_training and iteration % train_every == 0:
             ddpg.train()
 
-        state = np.array([sim.players[0].current_state[0], \
-            sim.players[0].current_state[1], \
-            sim.players[0].current_state[2], \
-            sim.players[0].current_state[3], \
-            goal[0], \
-            goal[1]]).reshape((-1, 6))
+        inside, index_hint = sim.is_inside_track(player.current_state[0:2], index_hint, 20)
+
+        if new_readings == None:
+            readings = player.simulate('laser', index_hint=index_hint, interval=20)
+        else:
+            readings = new_readings
+
+        [s, d] = sim.get_track_coordinates(player.current_state[0:2])
+        ds = sim.get_forward_ds(s, goal_s)
+        state = np.array([readings[0][1], readings[1][1], readings[2][1], ds, d, player.current_state[3]]).reshape((-1, 6))
 
         action = ddpg.act(state, is_training).reshape((2,))
 
@@ -98,22 +109,23 @@ for episode in range(num_episodes):
         sim.update_player(0, controls)
 
 
-# first_player_state = sim.players[0].current_state 
+# first_player_state = player.current_state 
 # print("x: {:.2f}, y: {:.2f}, theta: {:.2f}, v: {:.2f}".format(first_player_state[0], first_player_state[1], first_player_state[2], first_player_state[3]))
 
         sim.tick()
 
-        new_v_state = sim.players[0].current_state
-        next_state = np.array([new_v_state[0], new_v_state[1], new_v_state[2], new_v_state[3], goal[0], goal[1]]).reshape((1, 6))
-
-        dist_to_goal = np.sqrt(np.square(next_state[0][0] - goal[0]) + np.square(next_state[0][1] - goal[1]))
+        inside, _ = sim.is_inside_track(player.current_state[0:2], index_hint, 20)
+        new_readings = player.simulate('laser', index_hint=index_hint, interval=20)
+        [s, d] = sim.get_track_coordinates(player.current_state[0:2])
+        ds = sim.get_forward_ds(s, goal_s)
+        next_state = np.array([new_readings[0][1], new_readings[1][1], new_readings[2][1], ds, d, player.current_state[3]]).reshape((-1, 6))
 
         end_of_episode = False
-        if dist_to_goal < goal_threshold:
+        if ds < goal_threshold:
             reward = goal_reward
             print("REACHED GOAL!!!!")
             end_of_episode = True    
-        elif not sim.is_inside_track([next_state[0][0], next_state[0][1]]):
+        elif not inside:
             reward = collision_reward
             end_of_episode = True
         else:
@@ -124,19 +136,7 @@ for episode in range(num_episodes):
         if is_training:
             ddpg.memorize(state, action, next_state, reward, end_of_episode)
         
-        # HER
-        if is_training and not end_of_episode:
-            # Like goal is on next_state
-            hindsight_state = state
-            hindsight_state[0][4] = state[0][0]
-            hindsight_state[0][5] = state[0][1]
-
-            hindsight_next_state = next_state
-            hindsight_next_state[0][4] = next_state[0][0]
-            hindsight_next_state[0][5] = next_state[0][1]
-
-            ddpg.memorize(hindsight_state, action, hindsight_next_state, goal_reward, True)
 
         if end_of_episode or iteration == episode_length - 1:
-            print("Init goal distance: {}, Total reward: {}".format(init_goal_distance, tot_reward))
+            print("Init goal distance: {}, Total reward: {}".format(sim.get_forward_ds(init_s, goal_s), tot_reward))
             break

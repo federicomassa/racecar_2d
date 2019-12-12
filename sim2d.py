@@ -71,11 +71,18 @@ class SensorLaser(Sensor):
         index_hint = kwargs.get('index_hint', -1)
         interval = kwargs.get('interval', -1)
 
+        if index_hint == None:
+            index_hint = -1
+        if interval == None:
+            interval = -1
+
         readings = []
 
         current_point = self.player.current_state[0:2]
         inside, init_index = self.simulator.is_inside_track(current_point, index_hint, interval)
         if not inside:
+            for i in self.angles:
+                readings.append((i, 0.0))
             return readings
 
         for laser_angle in self.angles:
@@ -541,12 +548,12 @@ class Sim2D:
         product = np.dot(prev_to_point, prev_to_current)
         if product < 0:
             raise Exception("Product < 0 WHY?")
-        if self.__get_curvilinear_distance(prev_index, min_dist_index) < product:
+        if self.get_curvilinear_distance(prev_index, min_dist_index) < product:
             current_to_point = [point[0] - self.race_line[min_dist_index][0], point[1] - self.race_line[min_dist_index][1]]
             current_to_next = [self.race_line[next_index][0] - self.race_line[min_dist_index][0], self.race_line[next_index][1] - self.race_line[min_dist_index][1]]
             
             product = np.dot(current_to_point, current_to_next)
-            if self.__get_curvilinear_distance(min_dist_index, next_index) < product:
+            if self.get_curvilinear_distance(min_dist_index, next_index) < product:
                 raise Exception("WTF is going on")
             if product < 0:
                 raise Exception("Product < 0 WHY?")
@@ -569,9 +576,9 @@ class Sim2D:
 
         return local_point
             
-    def __get_curvilinear_distance(self, index1, index2):
+    def get_curvilinear_distance(self, index1, index2):
         dist = self.__curvilinear_abscissa[index2] - self.__curvilinear_abscissa[index1]
-        track_length = self.__curvilinear_abscissa[len(self.__curvilinear_abscissa)-1]
+        track_length = self.get_track_length()
 
         if index2 == 0 and index1 == len(self.race_line)-1:
             dist = np.sqrt(np.square(self.race_line[0][0]-self.race_line[len(self.race_line)-1][0]) + np.square(self.race_line[0][1]-self.race_line[len(self.race_line)-1][1]))
@@ -583,7 +590,47 @@ class Sim2D:
             dist += track_length
 
         return dist
-        
+
+    def get_forward_ds(self, s1, s2):
+        """
+        Get distance in curvilinear abscissa from local coordinates s1 to s2 going forward
+
+        Parameters:
+        ------------
+        s1: float
+            curvilinear abscissa of point 1
+        s2: float
+            curvilinear abscissa of point 2
+
+        Returns:
+        -----------
+        float:
+            delta s between point 1 and point 2
+        """
+
+        total_length = self.get_track_length() 
+        new_s2 = s2.copy()
+
+        if s2 < s1:
+            new_s2 += total_length
+
+        return (new_s2 - s1)
+
+    def get_track_length(self):
+        """
+        Get total length of track along race line
+
+        Returns:
+        ---------
+        float:
+            length of the track along the race line
+        """
+
+        total_length = self.__curvilinear_abscissa[-1] + np.sqrt(np.square(self.race_line[-1][0] - self.race_line[0][0]) + np.square(self.race_line[-1][1] - self.race_line[0][1]))
+        return total_length
+
+
+
 
     @staticmethod
     def get_sweeping(vector, index=-1, interval=-1):
@@ -601,6 +648,11 @@ class Sim2D:
             Interval around the index
         """
 
+        if index == None:
+            index = -1
+        if interval == None:
+            interval = -1
+        
         index_provided = index >= 0
         interval_provided = interval >= 0
 
@@ -969,9 +1021,10 @@ class Sim2D:
         next_y = self.race_line[next_index][1]
 
         theta = np.arctan2(next_y - y, next_x - x) + dtheta
-        self.players[0].current_state = [x - d*np.sin(theta), y + d*np.cos(theta), theta, v]
+        self.players[player_index].current_state = [x - d*np.sin(theta), y + d*np.cos(theta), theta, v]
         self.current_time = 0.0
 
+        # FIXME this is a reset for a particular player. Does not make much sense to reset simulator variables here
         self.__queue_persistent_points = []
 
     def __sleep(self):
