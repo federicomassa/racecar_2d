@@ -3,7 +3,24 @@ from rl_ddpg import *
 import numpy
 import sys
 
+def parse_bool(string):
+    if string == 'False' or string == 'false':
+        return False
+    elif string == 'True' or string == 'true':
+        return True
+    else:
+        raise Exception("Cannot convert string {} to bool".format(string))
+
+block_rendering = False
 argv = str(sys.argv)
+
+save_id = ''
+for i in range(len(argv)):
+    if argv[i] == '--render' and (i+1) < len(argv):
+        block_rendering = parse_bool(argv[i+1])
+    if argv[i] == '--save-id' and (i+1) < len(argv):
+        save_id = argv[i+1]
+
 block_rendering = ('render=False' in argv)
 
 sim = Sim2D(render=False)
@@ -34,13 +51,12 @@ goal_threshold = 1.0
 
 # Every how many episodes save network weights
 save_every = 5
-save_id = 'laser_test_1'
 
 # Every how many iterations train networks
 train_every = 10
 
 save = False
-if save_every > 0:
+if save_id != '' and save_every > 0:
     save = True
 
 # Every how many episodes to render
