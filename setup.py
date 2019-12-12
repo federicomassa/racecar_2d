@@ -7,5 +7,5 @@ setup(
    author='Federico Massa',
    author_email='fedemassa91@gmail.com',
    packages=['racecar_2d'],
-   install_requires=[],
+   install_requires=['rl_ddpg', 'pygame', 'numpy'],
 )
