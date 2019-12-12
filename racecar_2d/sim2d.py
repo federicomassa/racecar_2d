@@ -397,7 +397,7 @@ class Sim2D:
             N_steps = int(N_steps)
 
             # Next one will be last iteration
-            elif N_steps <= total_points*2 and i == len(traj)-2:
+            if N_steps <= total_points*2 and i == len(traj)-2:
                 penultimate_iteration = True
 
             jmin = len(xnew)
