@@ -17,7 +17,7 @@ argv = str(sys.argv)
 save_id = ''
 for i in range(len(argv)):
     if argv[i] == '--render' and (i+1) < len(argv):
-        block_rendering = parse_bool(argv[i+1])
+        block_rendering = not parse_bool(argv[i+1])
     if argv[i] == '--save-id' and (i+1) < len(argv):
         save_id = argv[i+1]
 
