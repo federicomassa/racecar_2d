@@ -6,7 +6,6 @@ import csv
 import time
 from collections import deque
 from scipy.spatial import Delaunay
-from abc import ABC, abstractmethod
 
 class TrajectoryPoint:
     def __init__(self, x=None, y=None, v=None):
@@ -21,8 +20,7 @@ class Line:
         self.y1 = y1
         self.y2 = y2    
 
-class Sensor(ABC):
-    @abstractmethod
+class Sensor:
     def simulate(self):
         pass
 
