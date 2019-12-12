@@ -394,6 +394,8 @@ class Sim2D:
             if math.isnan(N_steps):
                 raise Exception('Something went wrong. N_steps is NaN')
 
+            N_steps = int(N_steps)
+
             # Next one will be last iteration
             elif N_steps <= total_points*2 and i == len(traj)-2:
                 penultimate_iteration = True
