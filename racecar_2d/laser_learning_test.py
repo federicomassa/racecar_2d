@@ -15,6 +15,7 @@ block_rendering = False
 argv = sys.argv
 
 save_id = ''
+download = False
 for i in range(len(argv)):
     if argv[i] == '--render' and (i+1) < len(argv):
         block_rendering = not parse_bool(argv[i+1])
@@ -22,6 +23,38 @@ for i in range(len(argv)):
         save_id = str(argv[i+1])
         if save_id[0] == '\'' or save_id == '\"':
             save_id = save_id[1:-1]
+    if argv[i] == '--download' and (i+1) < len(argv):
+        download = parse_bool(argv[i+1])
+
+if download and save_id != '':
+    from pydrive.auth import GoogleAuth
+    from pydrive.drive import GoogleDrive
+
+    gauth = GoogleAuth()
+    gauth.LocalWebserverAuth()
+    drive = GoogleDrive(gauth)
+
+    # Look for Colab/LaserLearning2D folder files in Google Drive
+    colab_folder_id = None
+    for drive_file in drive.ListFile({'q': "'root' in parents and trashed=false"}).GetList():
+        if drive_file['title'] == 'Colab':
+            colab_folder_id = drive_file['id']
+            break
+
+    assert colab_folder_id != None, "Could not find folder Colab in Google Drive"
+    
+    laser_folder_id = None
+    for drive_file in drive.ListFile({'q': "'{}' in parents and trashed=false".format(colab_folder_id)}).GetList():
+        if drive_file['title'] == 'LaserLearning2D':
+            laser_folder_id = drive_file['id']
+            break
+
+    assert laser_folder_id != None, "Could not find folder Colab/LaserLearning2D in Google Drive"
+
+    for drive_file in drive.ListFile({'q': "'{}' in parents and trashed=false".format(laser_folder_id)}).GetList():
+        print('Downloading {} from GDrive'.format(drive_file['title']))
+        drive_file.GetContentFile(drive_file['title'])
+
 
 sim = Sim2D(render=False)
 sim.frequency = 25
@@ -60,7 +93,7 @@ if save_id != '' and save_every > 0:
     save = True
 
 # Every how many episodes to render
-render_every = 5
+render_every = 1
 
 if ddpg.save_exists(save_id):
     print("Loading from files with prefix: {}".format(save_id))
@@ -82,11 +115,22 @@ for episode in range(num_episodes):
     is_training = not rendering
 
     # Reset in random point along the racing line
-    #rand_index = np.random.randint(0, len(sim.race_line))
-    rand_index = 0
-    sim.reset(0, rand_index)
+    rand_index = np.random.randint(0, len(sim.race_line))
+    rand_d = np.random.uniform(-2.0,2.0)
+    rand_theta = np.random.uniform(-np.pi/4.0, np.pi/4.0)
+    rand_v = np.random.uniform(0.0,10.0)
+    sim.reset(0, rand_index, rand_d, rand_theta, rand_v)
 
-    goal_index = rand_index + np.random.randint(0, 50)
+    while (not sim.is_inside_track(player.current_state[0:2])[0]):
+      rand_index = np.random.randint(0, len(sim.race_line))
+      rand_d = np.random.uniform(-2.0,2.0)
+      rand_theta = np.random.uniform(-np.pi/4.0, np.pi/4.0)
+      rand_v = np.random.uniform(0.0,10.0)
+      sim.reset(0, rand_index, rand_d, rand_theta, rand_v)
+
+    init_v = rand_v
+
+    goal_index = rand_index + np.random.randint(0, 100)
     if goal_index >= len(sim.race_line):
         goal_index = goal_index - len(sim.race_line)
     if goal_index < 0:
@@ -158,5 +202,5 @@ for episode in range(num_episodes):
         
 
         if end_of_episode or iteration == episode_length - 1:
-            print("Init goal distance: {}, Total reward: {}".format(sim.get_forward_ds(init_s, goal_s), tot_reward))
+            print("Init goal distance: {}, Init v: {}, Total reward: {}".format(sim.get_forward_ds(init_s, goal_s), init_v, tot_reward))
             break
