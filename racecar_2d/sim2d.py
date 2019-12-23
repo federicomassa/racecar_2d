@@ -29,7 +29,7 @@ class Sensor:
 class SensorLaser(Sensor):
     def __init__(self, parent_player, simulator, angles, laser_range, laser_resolution):
         """
-        Parameters:
+        Parameters
         simulator: Sim2D instance
         angles: list or tuple of floats
             rays angles
@@ -504,11 +504,11 @@ class Sim2D:
         """
         Integrates length of a reference line
         
-        Parameters:
+        Parameters
         -------------
         ref_line: list or tuple of points (list or tuple of 2D coordinates)
 
-        Returns:
+        Returns
         list:
             list of same length of ref_line that contains the incremental length of the curve
         """
@@ -524,12 +524,14 @@ class Sim2D:
         """
         Transform point from global coordinates (x,y) to local (s,d) using the curvilinear abscissa computed on racing line
 
-        Parameters:
+        Args:
         -------------
-        point: point in global coordinates (tuple of 2 floats)
+        point: 
+            point in global coordinates (tuple of 2 floats)
 
-        Returns:
+        Returns
         ---------------
+        point: 
             point in local coordinates (tuple of 2 floats)
         """
         local_point = [None, None]
@@ -598,14 +600,14 @@ class Sim2D:
         """
         Get distance in curvilinear abscissa from local coordinates s1 to s2 going forward
 
-        Parameters:
+        Parameters
         ------------
         s1: float
             curvilinear abscissa of point 1
         s2: float
             curvilinear abscissa of point 2
 
-        Returns:
+        Returns
         -----------
         float:
             delta s between point 1 and point 2
@@ -623,7 +625,7 @@ class Sim2D:
         """
         Get total length of track along race line
 
-        Returns:
+        Returns
         ---------
         float:
             length of the track along the race line
@@ -700,12 +702,14 @@ class Sim2D:
             optional, index of the triangle around which to check for inside/outside. This might be an hint from previous evaluations
         check_interval: int
             optional, how many triangles around index_hint to check
+
         Returns
         ----------
         bool: 
             True if point is inside the track
         int: 
             Index of the triangle, might be used as an hint for future evaluations. If bool is False, it is None
+
         """
 
         is_inside_track = False

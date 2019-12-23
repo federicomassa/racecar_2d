@@ -1,7 +1,5 @@
 from racecar_2d import *
 import numpy
-import pdb
-pdb.set_trace()
 
 sim = Sim2D(render=True)
 sim.frequency = 25
@@ -11,7 +9,7 @@ sim.set_track('track.json')
 init_pose = []
 init_pose.append((sim.race_line[0][0], sim.race_line[0][1], 0.0, 0.0))
 
-sim.add_player('Acura_NSX_red.png', 4.4, unicycle_model, init_pose[0])
+sim.add_player('../images/Acura_NSX_red.png', 4.4, unicycle_model, init_pose[0])
 player = sim.players[0]
 player.add_sensor('laser', SensorLaser(player, sim, (-np.pi/6.0, 0.0, np.pi/6.0), 20.0, 0.1))
 
