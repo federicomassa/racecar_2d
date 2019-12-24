@@ -66,12 +66,11 @@ See tests/sim2d_test.py for a basic example.
 - `sim.add_player(image_path, vehicle_length, dynamic_model, initial_state)`: add a player, which will be visualized with an image found in **<image_path>**, of length **<vehicle_length>** (meters), model **<dynamic_model>**, initial state (x,y,theta,v) = **<initial_state>**. <dynamic_model> is a function: see sim2d.py, unicycle_model for an example.
 - `sim.players[<index>].add_sensor('sensor_name', <Sensor>(...))`: add a sensor named 'sensor_name' of type <Sensor> to the <index>-th player. See **Sensors** below.
 
-**If kinematic trajectory following mode:**
-{: .alert .alert-info}
+and, only if in **kinematic trajectory following mode**, one of the following:
 
 `sim.set_trajectory(player_index, array of (x,y,v) points)`
 
-**or**
+OR
 
 `sim.set_csv_trajectory(player_index, csv_file)`: CSV file containing a list of x,y,v points
 
@@ -86,8 +85,21 @@ while not sim.done:
 ```
 
 **Kinematic trajectory following mode**
+```python
+while not sim.done:
+    sim.update_trajectory(player_index)
+    sim.tick()
+```
 
-### Rendering
+### UI and Rendering
+If render is enabled (see Construction), tick() function renders the simulator to display. If you want, you can draw several stuff on the display, using draw_path and draw_point functions (see sim2d.py)
 
-### <i class="fab fa-gitlab fa-fw" style="color:rgb(252,109,38); font-size:.85em" aria-hidden="true"></i> Orange GitLab Tanuki
-{: #tanuki-orange}
+While active, the simulator reacts to the following user inputs:
+- [0-9]: focus camera on player with correspondent index
+- M: set manual mode and control car with arrow keys
+- F: detach camera from vehicle, move freely in the map while holding mouse 1 button
+
+
+### ROS interface
+
+TODO
