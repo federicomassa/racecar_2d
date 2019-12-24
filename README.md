@@ -99,6 +99,31 @@ While active, the simulator reacts to the following user inputs:
 - M: set manual mode and control car with arrow keys
 - F: detach camera from vehicle, move freely in the map while holding mouse 1 button
 
+### Sensors
+You can always access the following data of the vehicle:
+
+```python
+- (x,y,theta,v) = sim.players[player_index].current_state[0:4]
+- (s,d) = sim.get_track_coordinates(x,y) : local vehicle coordinates (curvilinear abscissa and transversal distance from racing line)
+```
+
+If you want, you can add a **laser sensor** to the <player_index>-th player by initializing the sensor this way (write this before entering the simulator loop (see tests/sim2d_test.py):
+
+```
+sim.players[<index>].add_sensor('laser', SensorLaser(sim.players[player_index], sim, (-3.14/6.0, 0.0, 3.14/6.0), 20.0, 0.1))
+```
+
+Here, we have declared a laser sensor with 3 rays, at -30°, 0°, 30° with respect to the fron of the car (positive counter-clockwise), range of 20 meters and 0.1 meters of resolution.
+The actual simulation is called within the simulator loop by calling 
+
+```
+readings = sim.players[player_index].simulate('laser', index_hint=index_hint, interval=20)
+```
+
+Here, <index_hint> is used for efficiency reasons and represents an estimate of the index of the Delaunay triangle the vehicle is in, while <interval> is the number of Delaunay triangles to check around the hint.
+In practice, index_hint can be obtained from the is_inside_track function. Again, see tests/sim_2d.py for an example of this. 
+
+Readings contains, for each laser ray (3 in this case), a pair (angle, range), that indicates the angle of the current laser (so -30°, 0° or 30° in our example), and the range is the distance from the vehicle to the obstacle.
 
 ### ROS interface
 
