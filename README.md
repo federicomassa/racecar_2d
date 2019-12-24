@@ -47,7 +47,9 @@ pip install .
 
 ## Usage
 
-See tests/sim2d_test.py for a basic example.
+See tests/sim2d_test.py for a basic example. Launch it with 
+
+`python tests/sim2d_test.py`
 
 ### Initialization
 
