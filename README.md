@@ -63,7 +63,7 @@ See tests/sim2d_test.py for a basic example.
 **Setup:**
 - `sim.frequency = 25`: set simulator frequency (in Hz, only for real time mode). This is both the rendering frequency and the state update frequency
 - `sim.set_track(<track_name>.json)`: set the json track. Right now racing line is required in JSON as a reference for the curvilinear abscissa
-- `sim.add_player(image_path, vehicle_length, dynamic_model, initial_state)`: add a player, which will be visualized with an image found in **<image_path>**, of length **<vehicle_length>** (meters), model **<dynamic_model>**, initial state (x,y,theta,v) = **<initial_state>**. <dynamic_model> is a function: see sim2d.py, unicycle_model for an example.
+- `sim.add_player(image_path, vehicle_length, dynamic_model, initial_state)`: add a player, which will be visualized with an image found in **<image_path>**, of length **<vehicle_length>** (meters), model **<dynamic_model>**, initial state (x,y,theta,v) = **<initial_state>**. <dynamic_model> is a function: see sim2d.py, unicycle_model for an example. This assign a player index starting from 0, in order of player creation.
 - `sim.players[<index>].add_sensor('sensor_name', <Sensor>(...))`: add a sensor named 'sensor_name' of type <Sensor> to the <index>-th player. See **Sensors** below.
 
 and, only if in **kinematic trajectory following mode**, one of the following:
