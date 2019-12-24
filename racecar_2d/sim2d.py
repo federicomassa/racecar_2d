@@ -221,8 +221,6 @@ class Sim2D:
         self.__queue_players = deque()
         self.do_triangle_sorting = sort_triangles
 
-        if self.__do_render:
-            self.display_on()
 
         self.current_time = 0.0
         self.track_json_path = None
@@ -805,8 +803,14 @@ class Sim2D:
 
     def render_ui(self):
         player_text = 'Player ' + str(self.focus_player.id)
-        if (self.is_manual):
+        if self.is_manual:
             player_text += ' - MANUAL'
+        elif not self.is_manual and self.focus_player.ref_trajectory == None:
+            player_text += ' - AUTONOMOUS'
+        elif not self.is_manual and self.focus_player.ref_trajectory != None:
+            player_text += ' - TRAJECTORY'
+        else:
+            raise Exception("Unmanaged situation. Call 911")
 
         state_text = "v: {:.2f} m/s".format(self.focus_player.current_state[3])
 
@@ -895,6 +899,9 @@ class Sim2D:
         self.__queue_lines = []
 
     def tick(self):
+        if self.__do_render:
+            self.display_on()
+
         for i in range(len(self.__is_updated)):
             if not self.__is_updated:
                 print("WARNING: Player {} was not updated. Staying still.".format(i))
@@ -934,27 +941,31 @@ class Sim2D:
                     if self.scale < 1.0:
                         self.scale /= self.zoom_action
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_1 and len(self.players) > 0:
-                    self.__focus_player(self.players[0])
-                    self.is_manual = False
-                    self.__fly_mode = False
-                if event.key == pygame.K_2 and len(self.players) > 1:
-                    self.__focus_player(self.players[1])
-                    self.is_manual = False
-                    self.__fly_mode = False
-                if event.key == pygame.K_3 and len(self.players) > 2:
-                    self.__focus_player(self.players[2])
-                    self.is_manual = False
-                    self.__fly_mode = False
-                if event.key == pygame.K_4 and len(self.players) > 3:
-                    self.__focus_player(self.players[3])
-                    self.is_manual = False
-                    self.__fly_mode = False
-                if event.key == pygame.K_0:
+                if event.key == pygame.K_0 and len(self.players) > 0:
+                    self.__request_focus(0)
+                elif event.key == pygame.K_1 and len(self.players) > 1:
+                    self.__request_focus(1)
+                elif event.key == pygame.K_2 and len(self.players) > 2:
+                    self.__request_focus(2)
+                elif event.key == pygame.K_3 and len(self.players) > 3:
+                    self.__request_focus(3)
+                elif event.key == pygame.K_4 and len(self.players) > 4:
+                    self.__request_focus(4)
+                elif event.key == pygame.K_5 and len(self.players) > 5:
+                    self.__request_focus(5)
+                elif event.key == pygame.K_6 and len(self.players) > 6:
+                    self.__request_focus(6)
+                elif event.key == pygame.K_7 and len(self.players) > 7:
+                    self.__request_focus(7)
+                elif event.key == pygame.K_8 and len(self.players) > 8:
+                    self.__request_focus(8)
+                elif event.key == pygame.K_9 and len(self.players) > 9:
+                    self.__request_focus(9)                    
+                elif event.key == pygame.K_f:
                     self.is_manual = False
                     self.__fly_mode = True
                     self.focus_player = None
-                if event.key == pygame.K_m and self.focus_player != None:
+                elif event.key == pygame.K_m and self.focus_player != None:
                     self.is_manual = not self.is_manual
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.clicked_point == None:
@@ -997,6 +1008,11 @@ class Sim2D:
         if clicked[0]:
             self.pressed_point = self.pix2world(pygame.mouse.get_pos())
     
+    def __request_focus(self, player_index):
+        self.__focus_player(self.players[player_index])
+        self.is_manual = False
+        self.__fly_mode = False
+
     def reset(self, player_index, race_line_index, d=0.0, dtheta=0.0, v=0.0):
         """
         Parameters
