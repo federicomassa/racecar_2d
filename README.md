@@ -4,7 +4,7 @@ This is a simple python racing car simulator using the 2D pygame library.
 
 ## Features
 - Synchronous
-- Interfaceable with ROS [TODO add bridge to the library]
+- Interfaceable with ROS
 - Multi-vehicle
 - Tracks are loaded from standard JSON used for Roborace (inside, outside and racing line) [TODO: use center line as a reference optionally]
 - State: (x,y,theta,v)
