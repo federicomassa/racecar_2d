@@ -149,8 +149,8 @@ The additional requirements are (tested with Python 2.7):
 - a complete typical installation of ROS
 
 after activating the virtual environment:
-- pip install pyyaml
-- pip install rospkg
+- `pip install pyyaml`
+- `pip install rospkg`
 
 **if you are NOT using a virtual environment**:
 - a complete typical installation of ROS
