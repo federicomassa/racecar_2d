@@ -1,15 +1,18 @@
 from racecar_2d import *
 import numpy
 
-sim = Sim2D(render=True)
+sim = Sim2D(render=True, use_ros=True)
 sim.frequency = 25
 sim.set_track('track.json')
 
 
 init_pose = []
 init_pose.append((sim.race_line[0][0], sim.race_line[0][1], 0.0, 0.0, 0.0))
+init_pose.append((sim.race_line[20][0], sim.race_line[20][1], 0.0, 0.0, 0.0))
 
 sim.add_player('../images/Acura_NSX_red.png', 4.4, unicycle_model, init_pose[0])
+sim.add_player('../images/Acura_NSX_yellow.png', 4.4, unicycle_model, init_pose[1])
+
 player = sim.players[0]
 player.add_sensor('laser', SensorLaser(player, sim, (-np.pi/6.0, 0.0, np.pi/6.0), 20.0, 0.1))
 
@@ -22,7 +25,8 @@ sim.is_manual = True
 while not sim.done:
     # Autonomous mode: give acceleration and steering = (0.0,0.0) to player 0 (the first and only in this case)
     sim.update_player(0, (0.0,0.0)) 
-
+    sim.update_player(1, (0.0,0.0)) 
+    
     # This is the current state after update
     (x,y,theta,v) = (player.current_state[0], player.current_state[1], player.current_state[2], player.current_state[3])
 

@@ -16,7 +16,7 @@ This is a simple python racing car simulator using the 2D pygame library.
 
 ## Requirements
 
-Tested on Python 3.6.6 but it should work on Python 2.7 also. [CHECK]
+Tested on Python 2.7 and 3.6.6.
 
 It is **very** recommended to use virtual environments to keep the installation environments isolated:
 
@@ -33,7 +33,15 @@ It is **very** recommended to use virtual environments to keep the installation 
 - `source ./<environment_name>/bin/activate` --> Activates the virtual environment
 - `deactivate` --> If you want to deactivate the current environment
  
+If you want to use the ROS interface, and you are using virtual environments, you will probably need to do this (**after activating your virtual environment**):
 
+```
+pip install rospy
+pip install pyyaml
+pip install rospkg
+```
+
+If you are **NOT** using virtual environments, it should be enough to install a complete ros distribution on your system.
 
 ## Build
 
@@ -129,4 +137,20 @@ Readings contains, for each laser ray (3 in this case), a pair (angle, range), t
 
 ### ROS interface
 
-TODO
+Abilitate ROS publishing of the vehicles state during construction:
+`sim = Sim2D(..., use_ros=True)`
+
+where "..." are the usual desired arguments (see Construction).
+Each vehicle will publish in a topic called /player_<player_index>/state. The type of the message is racecar_msgs/State. This is a custom message that is defined in the racecar_msgs repository([Github](https://github.com/federicomassa/racecar_msgs) or [Gitlab](https://gitlab.com/roboteam-italia/simulation/racecar_msgs)). Follow the instructions there to install it.
+
+The additional requirements are (tested with Python 2.7):
+
+**if you are using a virtual environment**:
+- a complete typical installation of ROS
+
+after activating the virtual environment:
+- pip install pyyaml
+- pip install rospkg
+
+**if you are NOT using a virtual environment**:
+- a complete typical installation of ROS

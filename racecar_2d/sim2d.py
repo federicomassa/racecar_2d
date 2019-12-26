@@ -8,6 +8,22 @@ from collections import deque
 from scipy.spatial import Delaunay
 import math
 
+try:
+  import rospy
+  import tf.transformations
+except ImportError:
+  ros_available = False
+else:
+  ros_available = True 
+
+try:
+  import racecar_msgs.msg
+except ImportError:
+  msgs_available = False
+else:
+  msgs_available = True 
+
+
 class TrajectoryPoint:
     def __init__(self, x=None, y=None, v=None):
         self.x = x
@@ -25,6 +41,35 @@ class Sensor:
     def simulate(self):
         pass
 
+class ROSManager:
+  def __init__(self, simulator):
+    self.players_pub = {}
+    self.simulator = simulator
+    
+  def add_player(self, index):
+    # If player was not registered yet
+    if not index in self.players_pub.keys():
+      self.players_pub[index] = []
+      
+    topic_namespace = 'player_' + str(index) + '/'
+    self.players_pub[index].append(rospy.Publisher(topic_namespace + 'state', racecar_msgs.msg.State, queue_size=10))
+    
+  def publish(self):
+    for index in self.players_pub:
+      for pub in self.players_pub[index]:
+        if pub.type == 'racecar_msgs/State':
+          msg = racecar_msgs.msg.State()
+          (x,y,theta,u,v) = self.simulator.players[index].current_state[0:5]
+          msg.header.stamp = rospy.Time.now()
+          msg.x = x
+          msg.y = y
+          msg.theta = theta
+          msg.u = u
+          msg.v = v
+          (s,d) = self.simulator.get_track_coordinates((x,y))
+          msg.s = s
+          msg.d = d
+          pub.publish(msg)
 
 class SensorLaser(Sensor):
     def __init__(self, parent_player, simulator, angles, laser_range, laser_resolution):
@@ -86,7 +131,7 @@ class SensorLaser(Sensor):
 
         for laser_angle in self.angles:
             angle = self.player.current_state[2] + laser_angle
-            point1 = current_point.copy()
+            point1 = list(current_point)
 
             # Linear search. Robust but slower than bisect (O(n) instead of O(log(n)))
             linear_count = int(np.ceil(self.range/self.resolution))
@@ -118,7 +163,7 @@ class Player:
 
     def init_state(self, state):
         assert isinstance(state, list) or isinstance(state, tuple)
-        assert len(state) == 4
+        assert len(state) == 5
         self.current_state = [x for x in state]
 
     def update_state(self, controls, dT, *argv):
@@ -155,8 +200,8 @@ class Player:
         return self.sensors[name].simulate(**kwargs)    
 
 def unicycle_model(current_state, controls, time_step, *argv):
-    if len(current_state) != 4:
-        raise Exception("current_state must be of length 4: x,y,theta,v")
+    if len(current_state) != 5:
+        raise Exception("current_state must be of length 5: x,y,theta,u,v")
     if len(controls) != 2:
         raise Exception("controls must be of length 2: v, omega")
 
@@ -165,12 +210,13 @@ def unicycle_model(current_state, controls, time_step, *argv):
     new_state[1] += current_state[3]*np.sin(current_state[2])*time_step
     new_state[2] += controls[1]*time_step
     new_state[3] += controls[0]*time_step
+    new_state[4] = 0.0
 
     return new_state
 
 def forward_unicycle_model(current_state, controls, time_step, *argv):
     if len(current_state) != 4:
-        raise Exception("current_state must be of length 4: x,y,theta,v")
+        raise Exception("current_state must be of length 5: x,y,theta,u,v")
     if len(controls) != 2:
         raise Exception("controls must be of length 2: v, omega")
 
@@ -179,6 +225,7 @@ def forward_unicycle_model(current_state, controls, time_step, *argv):
     new_state[1] += current_state[3]*np.sin(current_state[2])*time_step
     new_state[2] += controls[1]*time_step
     new_state[3] += controls[0]*time_step
+    new_state[4] = 0.0
 
     # Constrain to forward-only motion
     if new_state[3] < 0.0:
@@ -187,7 +234,7 @@ def forward_unicycle_model(current_state, controls, time_step, *argv):
     return new_state
 
 class Sim2D:
-    def __init__(self, render=True, sort_triangles=True, real_time=True):
+    def __init__(self, render=True, sort_triangles=True, real_time=True, use_ros=False):
         self.done = False
         # If render to screen or play in background
         self.__do_render = render
@@ -196,7 +243,18 @@ class Sim2D:
         if render and not real_time:
             raise Exception("Rendering only supports real time mode.")
 
+        if use_ros and not ros_available:
+          raise Exception("Cannot import ros modules! Check rospy installation")
+        if use_ros and not msgs_available:
+          raise Exception("Cannot import racecar_msgs modules! Have you installed them in current python environment?")
+      
+
         self.real_time = real_time
+        self.use_ros = use_ros
+        
+        if use_ros:
+          self.ros_manager = ROSManager(self)
+          rospy.init_node('racecar_2d', anonymous=True)
 
         # Graphical properties
         self.screen = None
@@ -233,35 +291,6 @@ class Sim2D:
         # Dictionary of vehicles in the form {player_index, (vehicle_img, vehicle_length)}
         self.players = []
         self.__is_updated = []
-
-    def test_laser(self, index_hint=-1, interval=-1):
-        assert self.do_triangle_sorting
-        assert len(self.players) != 0
-
-        laser_angles = [-np.pi/6.0, 0.0, np.pi/6.0] # rad
-        laser_resolution = 0.2 # m
-        laser_range = 20.0 # m
-
-        current_point = self.players[0].current_state[0:2]
-        inside, init_index = self.is_inside_track(current_point, index_hint, interval)
-        if not inside:
-            return
-
-        for laser_angle in laser_angles:
-            angle = self.players[0].current_state[2] + laser_angle
-            point1 = current_point.copy()
-
-            # Linear search. Robust but slower than bisect (O(n) instead of O(log(n)))
-            linear_count = int(np.ceil(laser_range/laser_resolution))
-            last_index = init_index
-            for i in range(linear_count):
-                point1[0] = point1[0] + np.cos(angle)*laser_resolution
-                point1[1] = point1[1] + np.sin(angle)*laser_resolution
-                is_inside, last_index = self.is_inside_track(point1, last_index, 10)
-                if not is_inside:
-                    break
-
-            self.__queue_lines.append(Line(self.players[0].current_state[0], self.players[0].current_state[1], point1[0], point1[1]))
 
     def display_on(self):
         if self.screen != None:
@@ -439,9 +468,13 @@ class Sim2D:
         self.players.append(Player(len(self.players), image_path, vehicle_length, model_fcn))
         self.players[len(self.players)-1].init_state(init_state)
         self.__is_updated.append(False)
+        player_index = len(self.players)-1
+        
+        if self.use_ros:
+          self.ros_manager.add_player(player_index)
 
         # Return player index
-        return len(self.players) - 1
+        return player_index
 
     def __focus_player(self, player):
         try:
@@ -480,7 +513,7 @@ class Sim2D:
         points = np.array(points)
 
         t = Delaunay(points)
-        self.delaunay_triangles = points[self.__clean_triangles(t.simplices.copy())]
+        self.delaunay_triangles = points[self.__clean_triangles(list(t.simplices))]
 
         if self.do_triangle_sorting:
             self.__curvilinear_abscissa = self.__compute_curvilinear_abscissa(self.race_line)
@@ -612,7 +645,7 @@ class Sim2D:
         """
 
         total_length = self.get_track_length() 
-        new_s2 = s2.copy()
+        new_s2 = float(s2)
 
         if s2 < s1:
             new_s2 += total_length
@@ -901,6 +934,9 @@ class Sim2D:
     def tick(self):
         if self.__do_render:
             self.display_on()
+
+        if self.use_ros:
+          self.ros_manager.publish()
 
         for i in range(len(self.__is_updated)):
             if not self.__is_updated:
