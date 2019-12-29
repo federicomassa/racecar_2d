@@ -7,6 +7,7 @@ import time
 from collections import deque
 from scipy.spatial import Delaunay
 import math
+import os.path
 
 try:
   import rospy
@@ -278,7 +279,8 @@ class Sim2D:
         self.__queue_persistent_points = []
         self.__queue_players = deque()
         self.do_triangle_sorting = sort_triangles
-
+        self.one_point_every = 1
+        self.dump_file = None
 
         self.current_time = 0.0
         self.track_json_path = None
@@ -490,7 +492,21 @@ class Sim2D:
     def pix2world(self, pix_point):
         return ((pix_point[0] - self.screen.get_width()/2.0)*float(self.scale) + self.origin[0], -(pix_point[1] - self.screen.get_height()/2.0)*float(self.scale) + self.origin[1])
 
-    def set_track(self,track_json_path):
+    def set_track(self,track_json_path, dump_file=None, one_point_every=1):
+        """
+        Sets the track map. The track is specified in JSON format, and it should contain an array of "Inside" points, "Outside" points and "Racing" points, which constitutes the racing line, used as a reference for the curvilinear abscissa.
+        
+        Args: 
+        -----------
+        track_json_path: string
+            the path of the json file
+        dump_file: string
+            path of the file where to dump the sorted Delaunay triangles, to avoid doing it again every time you run the simulator
+        one_point_every: int
+            specifies that not every point of the track has to be rendered each frame. This is useful for large maps. 
+        """
+
+        self.dump_file = dump_file
         self.track_json_path = track_json_path
         self.race_line, self.ins_line, self.out_line = json_parser.json_parser(track_json_path, 1)
         self.origin = (self.race_line[0][0], self.race_line[0][1])
@@ -514,30 +530,42 @@ class Sim2D:
 
         t = Delaunay(points)
         self.delaunay_triangles = points[self.__clean_triangles(list(t.simplices))]
+        self.__curvilinear_abscissa = self.__compute_curvilinear_abscissa(self.race_line)
+
+
+        dump_exists = dump_file != None and os.path.exists(dump_file)
 
         if self.do_triangle_sorting:
-            print("Starting Dealunay triangles sorting, this could take a while on large maps...")
+            import pickle
+            if dump_exists:
+                print("Loading Delaunay triangles from file {}".format(dump_file))
+                self.delaunay_triangles = pickle.load(open(dump_file, 'r'))
+            else:
+                print("Starting Dealunay triangles sorting, this could take a while on large maps...")
 
-            self.__curvilinear_abscissa = self.__compute_curvilinear_abscissa(self.race_line)
-            
-            # Compute centers of each triangle in delaunay triangles
-            delaunay_centers = [((t[0][0] + t[1][0] + t[2][0])/3.0, \
-                (t[0][1] + t[1][1] + t[2][1])/3.0) for t in self.delaunay_triangles]
+                # Compute centers of each triangle in delaunay triangles
+                delaunay_centers = [((t[0][0] + t[1][0] + t[2][0])/3.0, \
+                    (t[0][1] + t[1][1] + t[2][1])/3.0) for t in self.delaunay_triangles]
 
-            # Compute curvilinear abscissa of each triangle center
-            from tqdm import tqdm
+                # Compute curvilinear abscissa of each triangle center
+                from tqdm import tqdm
 
-            delaunay_s = []
-            for i in tqdm(range(len(delaunay_centers))):
-                p = delaunay_centers[i]
-                delaunay_s.append(self.get_track_coordinates(p)[0])
+                delaunay_s = []
+                for i in tqdm(range(len(delaunay_centers))):
+                    p = delaunay_centers[i]
+                    delaunay_s.append(self.get_track_coordinates(p)[0])
 
-            # Get sorting order
-            sorting_indices = np.argsort(delaunay_s)
+                # Get sorting order
+                sorting_indices = np.argsort(delaunay_s)
 
-            # Sort delaunay triangles 
-            self.delaunay_triangles = [self.delaunay_triangles[i] for i in sorting_indices]
+                # Sort delaunay triangles 
+                self.delaunay_triangles = [self.delaunay_triangles[i] for i in sorting_indices]
 
+                # Dump to file for future loading
+                if dump_file != None:
+                    pickle.dump(self.delaunay_triangles, open(dump_file, 'wb'))
+
+        self.one_point_every = one_point_every
 
     def __compute_curvilinear_abscissa(self, ref_line):
         """
@@ -810,6 +838,8 @@ class Sim2D:
 
 
         for i in range(len(self.ins_line)):
+            if i % self.one_point_every != 0: 
+                continue
 
             if i != len(self.ins_line)-1:
                 start_point_px = self.world2pix(self.ins_line[i])
@@ -821,6 +851,8 @@ class Sim2D:
             pygame.draw.line(self.screen, self.track_color, start_point_px, end_point_px, self.track_pix_size)
 
         for i in range(len(self.out_line)):
+            if i % self.one_point_every != 0: 
+                continue
 
             if i != len(self.out_line)-1:
                 start_point_px = self.world2pix(self.out_line[i])
