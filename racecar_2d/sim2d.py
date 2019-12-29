@@ -516,6 +516,8 @@ class Sim2D:
         self.delaunay_triangles = points[self.__clean_triangles(list(t.simplices))]
 
         if self.do_triangle_sorting:
+            print("Starting Dealunay triangles sorting, this could take a while on large maps...")
+
             self.__curvilinear_abscissa = self.__compute_curvilinear_abscissa(self.race_line)
             
             # Compute centers of each triangle in delaunay triangles
@@ -523,13 +525,19 @@ class Sim2D:
                 (t[0][1] + t[1][1] + t[2][1])/3.0) for t in self.delaunay_triangles]
 
             # Compute curvilinear abscissa of each triangle center
-            delaunay_s = [self.get_track_coordinates(p)[0] for p in delaunay_centers]
+            from tqdm import tqdm
+
+            delaunay_s = []
+            for i in tqdm(range(len(delaunay_centers))):
+                p = delaunay_centers[i]
+                delaunay_s.append(self.get_track_coordinates(p)[0])
 
             # Get sorting order
             sorting_indices = np.argsort(delaunay_s)
 
             # Sort delaunay triangles 
             self.delaunay_triangles = [self.delaunay_triangles[i] for i in sorting_indices]
+
 
     def __compute_curvilinear_abscissa(self, ref_line):
         """
