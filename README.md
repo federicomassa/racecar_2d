@@ -101,6 +101,17 @@ while not sim.done:
     sim.tick()
 ```
 
+**Manual mode**
+
+1) If no update is called, the focused player is assumed manual. If there are other players and no update is called, they will stay still and a warning will be printed on the terminal.
+
+```python
+while not sim.done:
+    sim.tick()
+```
+
+2) If the car is normally driven by a controller or a trajectory, force manual mode for focused player by pressing M (see 'UI and Rendering')
+
 ### UI and Rendering
 If render is enabled (see Construction), tick() function renders the simulator to display. If you want, you can draw several stuff on the display, using draw_path and draw_point functions (see sim2d.py)
 

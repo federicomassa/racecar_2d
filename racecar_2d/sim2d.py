@@ -248,7 +248,6 @@ class Sim2D:
           raise Exception("Cannot import ros modules! Check rospy installation")
         if use_ros and not msgs_available:
           raise Exception("Cannot import racecar_msgs modules! Have you installed them in current python environment?")
-      
 
         self.real_time = real_time
         self.use_ros = use_ros
@@ -293,6 +292,9 @@ class Sim2D:
         # Dictionary of vehicles in the form {player_index, (vehicle_img, vehicle_length)}
         self.players = []
         self.__is_updated = []
+
+        if self.__do_render:
+            self.display_on()
 
     def display_on(self):
         if self.screen != None:
@@ -980,7 +982,12 @@ class Sim2D:
 
         for i in range(len(self.__is_updated)):
             if not self.__is_updated:
-                print("WARNING: Player {} was not updated. Staying still.".format(i))
+                if self.players[i] != self.focus_player:
+                    print("WARNING: Player {} was not updated. Staying still.".format(i))
+                else:
+                    # If focus player is not updated, assume manual mode
+                    self.is_manual = True
+
     
         # Update players in queue
         while len(self.__queue_players) != 0:
