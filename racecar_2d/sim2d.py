@@ -621,14 +621,14 @@ class Sim2D:
         prev_to_point = [point[0] - self.race_line[prev_index][0], point[1] - self.race_line[prev_index][1]]
         prev_to_current = [self.race_line[min_dist_index][0] - self.race_line[prev_index][0], self.race_line[min_dist_index][1] - self.race_line[prev_index][1]]
 
-        product = np.dot(prev_to_point, prev_to_current)
+        product = np.dot(prev_to_point, prev_to_current)/np.dot(prev_to_current, prev_to_current)
         if product < 0:
             raise Exception("Product < 0 WHY?")
         if self.get_curvilinear_distance(prev_index, min_dist_index) < product:
             current_to_point = [point[0] - self.race_line[min_dist_index][0], point[1] - self.race_line[min_dist_index][1]]
             current_to_next = [self.race_line[next_index][0] - self.race_line[min_dist_index][0], self.race_line[next_index][1] - self.race_line[min_dist_index][1]]
             
-            product = np.dot(current_to_point, current_to_next)
+            product = np.dot(current_to_point, current_to_next)/np.dot(current_to_next, current_to_next)
             if self.get_curvilinear_distance(min_dist_index, next_index) < product:
                 raise Exception("WTF is going on")
             if product < 0:
