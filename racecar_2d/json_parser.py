@@ -42,9 +42,9 @@ def json_parser(json_file, take_every=1):
 
                 # Check duplicates
                 if len(out) == 0:
-                    out.append((n,m))
+                    out.append((x,y))
                 elif abs(x - out[-1][0]) > tol or abs(y - out[-1][1]) > tol:
-                    out.append((n,m))
+                    out.append((x,y))
 
         # Check duplicates between first and last point
         if abs(out[0][0] - out[-1][0]) < tol and abs(out[0][1] - out[-1][1]) < tol :
@@ -58,11 +58,10 @@ def json_parser(json_file, take_every=1):
 
                 # Check duplicates
                 if len(race) == 0:
-                    race.append((n,m))
+                    race.append((g,h))
                 elif abs(g - race[-1][0]) > tol or abs(h - race[-1][1]) > tol:
-                    race.append((n,m))
+                    race.append((g,h))
 
-                race.append((g,h))
 
         # Check duplicates between first and last point
         if abs(race[0][0] - race[-1][0]) < tol and abs(race[0][1] - race[-1][1]) < tol :
