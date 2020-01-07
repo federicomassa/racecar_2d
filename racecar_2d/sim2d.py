@@ -278,7 +278,7 @@ class Sim2D:
         self.__queue_persistent_points = []
         self.__queue_players = deque()
         self.do_triangle_sorting = sort_triangles
-        self.one_point_every = 1
+        self.render_one_every = 1
         self.dump_file = None
 
         self.current_time = 0.0
@@ -494,7 +494,7 @@ class Sim2D:
     def pix2world(self, pix_point):
         return ((pix_point[0] - self.screen.get_width()/2.0)*float(self.scale) + self.origin[0], -(pix_point[1] - self.screen.get_height()/2.0)*float(self.scale) + self.origin[1])
 
-    def set_track(self,track_json_path, dump_file=None, one_point_every=1):
+    def set_track(self,track_json_path, dump_file=None, render_one_every=1, take_point_every=1):
         """
         Sets the track map. The track is specified in JSON format, and it should contain an array of "Inside" points, "Outside" points and "Racing" points, which constitutes the racing line, used as a reference for the curvilinear abscissa.
         
@@ -504,13 +504,15 @@ class Sim2D:
             the path of the json file
         dump_file: string
             path of the file where to dump the sorted Delaunay triangles, to avoid doing it again every time you run the simulator
-        one_point_every: int
-            specifies that not every point of the track has to be rendered each frame. This is useful for large maps. 
+        render_one_every: int
+            specifies that not every point of the track has to be rendered each frame. This is useful for large maps. NB it only affects rendering 
+        take_point_every: int
+            take one point every X on the racing line. NB this affects how the values of the local coordinates 
         """
 
         self.dump_file = dump_file
         self.track_json_path = track_json_path
-        self.race_line, self.ins_line, self.out_line = json_parser.json_parser(track_json_path, 1)
+        self.race_line, self.ins_line, self.out_line = json_parser.json_parser(track_json_path, take_point_every)
         self.origin = (self.race_line[0][0], self.race_line[0][1])
 
         if self.race_line[len(self.race_line)-1] == self.race_line[0]:
@@ -567,7 +569,7 @@ class Sim2D:
                 if dump_file != None:
                     pickle.dump(self.delaunay_triangles, open(dump_file, 'wb'))
 
-        self.one_point_every = one_point_every
+        self.render_one_every = render_one_every
 
     def __compute_curvilinear_abscissa(self, ref_line):
         """
@@ -840,7 +842,7 @@ class Sim2D:
 
 
         for i in range(len(self.ins_line)):
-            if i % self.one_point_every != 0: 
+            if i % self.render_one_every != 0: 
                 continue
 
             if i != len(self.ins_line)-1:
@@ -853,7 +855,7 @@ class Sim2D:
             pygame.draw.line(self.screen, self.track_color, start_point_px, end_point_px, self.track_pix_size)
 
         for i in range(len(self.out_line)):
-            if i % self.one_point_every != 0: 
+            if i % self.render_one_every != 0: 
                 continue
 
             if i != len(self.out_line)-1:

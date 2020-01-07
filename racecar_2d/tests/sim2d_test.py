@@ -5,7 +5,7 @@ pdb.set_trace()
 
 sim = Sim2D(render=True)
 sim.frequency = 25
-sim.set_track('/home/luca/Downloads/Baltimore.json', dump_file='Baltimore.dump', one_point_every=10)
+sim.set_track('/home/luca/Downloads/Baltimore.json', dump_file='Baltimore.dump', render_one_every=10)
 #sim.set_track('track.json', dump_file='track.dump')
 
 
