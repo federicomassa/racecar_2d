@@ -216,7 +216,7 @@ def unicycle_model(current_state, controls, time_step, *argv):
     return new_state
 
 def forward_unicycle_model(current_state, controls, time_step, *argv):
-    if len(current_state) != 4:
+    if len(current_state) != 5:
         raise Exception("current_state must be of length 5: x,y,theta,u,v")
     if len(controls) != 2:
         raise Exception("controls must be of length 2: v, omega")
@@ -374,6 +374,9 @@ class Sim2D:
         self.__is_updated[player_index] = True
 
     def update_trajectory(self, player_index):
+        if self.players[player_index] == self.focus_player and self.is_manual:
+            return
+
         player = self.players[player_index]
         traj = player.ref_trajectory
 
@@ -465,7 +468,7 @@ class Sim2D:
         else:
             player.index_ref_trajectory = i
 
-        player.current_state = [xnew[total_points-1], ynew[total_points-1], thetanew[total_points-1], vnew[total_points-1]]
+        player.current_state = [xnew[total_points-1], ynew[total_points-1], thetanew[total_points-1], vnew[total_points-1], 0.0]
         self.__is_updated[player_index] = True
         
     def add_player(self, image_path, vehicle_length, model_fcn, init_state):
