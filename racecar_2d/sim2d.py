@@ -635,7 +635,9 @@ class Sim2D:
             if self.get_curvilinear_distance(min_dist_index, next_index) < product:
                 raise Exception("WTF is going on")
             if product < 0:
-                raise Exception("Product < 0 WHY?")
+                # This is the ambiguous case where the point is on the convex part of the three points (prev, min, next). Choose min to avoid ambiguity
+                # This is the same as setting product = 0.0
+                product = 0.0
         
             actual_prev_index = min_dist_index
             actual_next_index = next_index
