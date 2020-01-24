@@ -186,7 +186,7 @@ class Player:
 
     def set_trajectory(self, trajectory):
         assert isinstance(trajectory, list) or isinstance(trajectory, tuple)
-        assert len(trajectory) != 0
+        assert len(trajectory) > 1
         assert isinstance(trajectory[0], TrajectoryPoint)
 
         self.ref_trajectory = trajectory
